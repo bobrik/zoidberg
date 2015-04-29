@@ -1,4 +1,4 @@
-package explorer
+package zoidberg
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"strings"
 
 	"github.com/samuel/go-zookeeper/zk"
 )
@@ -35,7 +36,7 @@ func NewExplorer(d Discoverer, zc *zk.Conn, zp string, location ExplorerLocation
 			return nil, err
 		}
 
-		state.Versions = map[string]Version{}
+		state.Versions = map[string][]Version{}
 	} else {
 		err := json.Unmarshal(ss, &state)
 		if err != nil {
@@ -63,19 +64,8 @@ func (e *Explorer) Run() error {
 			continue
 		}
 
-		e.announce(d.Balancers)
-
-		upstreams := e.state.GenerateUpstreams(d.Servers)
-		e.updateUpstreams(d.Balancers, upstreams)
-
-		sj, _ := json.Marshal(d.Servers)
-		uj, _ := json.Marshal(upstreams)
-
-		log.Println("servers:", string(sj))
-		log.Println("upstreams:", string(uj))
+		e.updateBalancers(d)
 	}
-
-	return nil
 }
 
 func (e *Explorer) setError(err error) {
@@ -84,27 +74,17 @@ func (e *Explorer) setError(err error) {
 	e.mutex.Unlock()
 }
 
-func (e *Explorer) announce(balancers []Balancer) {
-	for _, b := range balancers {
-		err := b.announce(e.location)
+func (e *Explorer) updateBalancers(discovery Discovery) {
+	state := e.getState()
+
+	for _, b := range discovery.Balancers {
+		err := b.update(discovery.Apps, state, e.location)
 		if err != nil {
-			log.Printf("error announcing itself to %s: %s\n", b, err)
+			log.Printf("error updating state on %s: %s\n", b, err)
 			continue
 		}
 
-		log.Println("announced itself to", b)
-	}
-}
-
-func (e *Explorer) updateUpstreams(balancers []Balancer, upstreams []Upstream) {
-	for _, b := range balancers {
-		err := b.updateUpstreams(upstreams)
-		if err != nil {
-			log.Printf("error updating upstreams on %s: %s\n", b, err)
-			continue
-		}
-
-		log.Println("updated upstreams on", b)
+		log.Println("updated state on", b)
 	}
 }
 
@@ -116,9 +96,9 @@ func (e *Explorer) getState() State {
 	return s
 }
 
-func (e *Explorer) setState(s State) {
+func (e *Explorer) setVersions(app string, versions []Version) {
 	e.mutex.Lock()
-	e.state = s
+	e.state.Versions[app] = versions
 	e.mutex.Unlock()
 }
 
@@ -151,32 +131,43 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 	})
 
 	mux.HandleFunc("/state", func(w http.ResponseWriter, req *http.Request) {
-		defer req.Body.Close()
-
-		switch req.Method {
-		case "GET":
-			w.Header().Add("Content-type", "application/json")
-			json.NewEncoder(w).Encode(e.getState())
-		case "POST", "PUT":
-			d := json.NewDecoder(req.Body)
-			s := State{}
-			err := d.Decode(&s)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("state decoding failed: %s", err), http.StatusBadRequest)
-				return
-			}
-
-			e.setState(s)
-			err = e.persistState()
-			if err != nil {
-				http.Error(w, fmt.Sprintf("state set successfully, but persisting failed: %s", err), http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			w.WriteHeader(http.StatusBadRequest)
+		if req.Method != "GET" {
+			http.Error(w, "expected GET", http.StatusBadRequest)
+			return
 		}
+
+		w.Header().Add("Content-type", "application/json")
+		json.NewEncoder(w).Encode(e.getState())
+	})
+
+	mux.HandleFunc("/versions/", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != "POST" && req.Method != "PUT" {
+			http.Error(w, "expected POST or PUT", http.StatusBadRequest)
+			return
+		}
+
+		d := json.NewDecoder(req.Body)
+		v := []Version{}
+		err := d.Decode(&v)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("version decoding failed: %s", err), http.StatusBadRequest)
+			return
+		}
+
+		a := strings.TrimPrefix(req.URL.Path, "/versions/")
+		if a == "" {
+			http.Error(w, "application is not specified", http.StatusBadRequest)
+			return
+		}
+
+		e.setVersions(a, v)
+		err = e.persistState()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("state set successfully, but persisting failed: %s", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/discovery", func(w http.ResponseWriter, req *http.Request) {

@@ -1,6 +1,7 @@
-package explorer
+package zoidberg
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gambol99/go-marathon"
@@ -9,14 +10,14 @@ import (
 type MarathonDiscoverer struct {
 	m        marathon.Marathon
 	balancer string
-	group    string
+	groups   []string
 }
 
-func NewMarathonDiscoverer(m marathon.Marathon, balancer, group string) MarathonDiscoverer {
+func NewMarathonDiscoverer(m marathon.Marathon, balancer string, groups []string) MarathonDiscoverer {
 	return MarathonDiscoverer{
 		m:        m,
 		balancer: balancer,
-		group:    group,
+		groups:   groups,
 	}
 }
 
@@ -28,13 +29,13 @@ func (m MarathonDiscoverer) Discover() (Discovery, error) {
 		return discovery, err
 	}
 
-	servers, err := m.servers()
+	apps, err := m.apps()
 	if err != nil {
 		return discovery, err
 	}
 
 	discovery.Balancers = balancers
-	discovery.Servers = servers
+	discovery.Apps = apps
 
 	return discovery, nil
 }
@@ -57,30 +58,59 @@ func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
 	return balancers, nil
 }
 
-func (m MarathonDiscoverer) servers() (map[string][]Server, error) {
-	group, err := m.m.Group(m.group)
-	if err != nil {
-		return nil, err
-	}
+func (m MarathonDiscoverer) apps() (Apps, error) {
+	apps := map[string]App{}
 
-	servers := map[string][]Server{}
-
-	for _, app := range group.Apps {
-		app, err := m.m.Application(app.ID)
+	for _, group := range m.groups {
+		app, err := m.app(group)
 		if err != nil {
 			return nil, err
 		}
 
-		version := strings.TrimPrefix(app.ID, group.ID)
-		servers[version] = make([]Server, len(app.Tasks))
+		apps[app.Name] = app
+	}
 
-		for i, task := range app.Tasks {
-			servers[version][i] = Server{
-				Host: task.Host,
-				Port: task.Ports[0],
+	return apps, nil
+}
+
+func (m MarathonDiscoverer) app(group string) (App, error) {
+	g, err := m.m.Group(group)
+	if err != nil {
+		return App{}, err
+	}
+
+	application := App{
+		Servers: []Server{},
+	}
+
+	for _, app := range g.Apps {
+		app, err := m.m.Application(app.ID)
+		if err != nil {
+			return App{}, err
+		}
+
+		// first app contributes name and port, they should be the same anyway
+		if application.Name == "" {
+			if name, ok := app.Labels["zoidberg_app_name"]; ok {
+				application.Name = name
+				application.Port = app.Ports[0] // TODO: maybe all of them?
 			}
+		}
+
+		version := strings.TrimPrefix(app.ID, g.ID)
+
+		for _, task := range app.Tasks {
+			application.Servers = append(application.Servers, Server{
+				Version: version,
+				Host:    task.Host,
+				Port:    task.Ports[0], // TODO: maybe all of them?
+			})
 		}
 	}
 
-	return servers, nil
+	if application.Name == "" {
+		return App{}, fmt.Errorf("application name not discovered for %q", group)
+	}
+
+	return application, nil
 }
