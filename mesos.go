@@ -1,4 +1,4 @@
-package explorer
+package zoidberg
 
 import (
 	"encoding/json"
@@ -83,14 +83,14 @@ func (mp *mesosPorts) UnmarshalJSON(b []byte) error {
 }
 
 type MesosDiscoverer struct {
-	masters []string
-	app     string
+	masters  []string
+	balancer string
 }
 
-func NewMesosDiscoverer(masters []string, app string) MesosDiscoverer {
+func NewMesosDiscoverer(masters []string, balancer string) MesosDiscoverer {
 	return MesosDiscoverer{
-		masters: masters,
-		app:     app,
+		masters:  masters,
+		balancer: balancer,
 	}
 }
 
@@ -103,7 +103,7 @@ func (m MesosDiscoverer) Discover() (Discovery, error) {
 	}
 
 	discovery.Balancers = m.balancers(tasks)
-	discovery.Servers = m.servers(tasks)
+	discovery.Apps = m.apps(tasks)
 
 	return discovery, nil
 }
@@ -112,7 +112,7 @@ func (m MesosDiscoverer) balancers(tasks []refinedMesosTask) []Balancer {
 	balancers := []Balancer{}
 
 	for _, task := range tasks {
-		if task.Labels["explorer_balancer_for"] == m.app {
+		if task.Labels["zoidberg_balancer_for"] == m.balancer {
 			balancers = append(balancers, Balancer{
 				Host: task.Host,
 				Port: task.Ports[0],
@@ -123,21 +123,46 @@ func (m MesosDiscoverer) balancers(tasks []refinedMesosTask) []Balancer {
 	return balancers
 }
 
-func (m MesosDiscoverer) servers(tasks []refinedMesosTask) map[string][]Server {
-	servers := map[string][]Server{}
+func (m MesosDiscoverer) apps(tasks []refinedMesosTask) Apps {
+	apps := map[string]App{}
 
 	for _, task := range tasks {
-		if task.Labels["explorer_app"] == m.app {
-			version := task.Labels["explorer_app_version"]
+		if task.Labels["zoidberg_balanced_by"] != m.balancer {
+			continue
+		}
 
-			servers[version] = append(servers[version], Server{
-				Host: task.Host,
-				Port: task.Ports[0],
-			})
+		name := task.Labels["zoidberg_app_name"]
+		if name == "" {
+			continue
+		}
+
+		version := task.Labels["zoidberg_app_version"]
+		if version == "" {
+			continue
+		}
+
+		app := apps[name]
+		if app.Name == "" {
+			port, err := strconv.Atoi(task.Labels["zoidberg_app_port"])
+			if err == nil {
+				app.Name = name
+				app.Port = port
+			}
+		}
+
+		app.Servers = append(app.Servers, Server{
+			Version: version,
+			Host:    task.Host,
+			Port:    task.Ports[0],
+		})
+
+		// port is valid, good to go
+		if app.Name != "" {
+			apps[name] = app
 		}
 	}
 
-	return servers
+	return apps
 }
 
 func (m MesosDiscoverer) tasks() ([]refinedMesosTask, error) {
@@ -166,6 +191,10 @@ func (m MesosDiscoverer) tasks() ([]refinedMesosTask, error) {
 	for _, f := range s.Frameworks {
 		for _, t := range f.Tasks {
 			if t.State != "TASK_RUNNING" {
+				continue
+			}
+
+			if len(t.Resources.Ports) == 0 {
 				continue
 			}
 

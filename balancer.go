@@ -1,44 +1,35 @@
-package explorer
+package zoidberg
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
 type Balancer struct {
 	Host string `json:"host"`
-	Port int `json:"port"`
+	Port int    `json:"port"`
 }
 
-func (b Balancer) announce(location ExplorerLocation) error {
-	body, err := json.Marshal(location)
-	if err != nil {
-		return err
-	}
-
-	u := fmt.Sprintf("http://%s:%d/explorer_location", b.Host, b.Port)
-	resp, err := http.Post(u, "application/json", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	resp.Body.Close()
-
-	return nil
+type balancerState struct {
+	Apps     Apps             `json:"apps"`
+	State    State            `json:"state"`
+	Explorer ExplorerLocation `json:"explorer"`
 }
 
-func (b Balancer) updateUpstreams(upstreams []Upstream) error {
-	body, err := json.Marshal(upstreams)
+func (b Balancer) update(apps Apps, state State, location ExplorerLocation) error {
+	body, err := json.Marshal(balancerState{
+		Apps:     apps,
+		State:    state,
+		Explorer: location,
+	})
+
 	if err != nil {
 		return err
 	}
 
-	log.Printf("sending to %s: %s\n", b, string(body))
-
-	u := fmt.Sprintf("http://%s:%d/upstreams", b.Host, b.Port)
+	u := fmt.Sprintf("http://%s:%d/state", b.Host, b.Port)
 	resp, err := http.Post(u, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err

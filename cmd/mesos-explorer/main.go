@@ -16,11 +16,11 @@ import (
 
 func main() {
 	m := flag.String("master", "", "mesos master url")
-	a := flag.String("app", "", "application to handle")
+	b := flag.String("balancer", "", "balancer to provide")
 	z := flag.String("zk", "", "zk connection in host:port,host:port/path format")
 	flag.Parse()
 
-	if *m == "" || *a == "" || *z == "" {
+	if *m == "" || *b == "" || *z == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -56,14 +56,14 @@ func main() {
 		}
 	}()
 
-	l := explorer.ExplorerLocation{
+	l := zoidberg.ExplorerLocation{
 		Host: host,
 		Port: port,
 	}
 
-	d := explorer.NewMesosDiscoverer([]string{*m}, *a)
+	d := zoidberg.NewMesosDiscoverer([]string{*m}, *b)
 
-	e, err := explorer.NewExplorer(d, zc, zp, l)
+	e, err := zoidberg.NewExplorer(d, zc, zp, l)
 	if err != nil {
 		log.Fatal(err)
 	}
