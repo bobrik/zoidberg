@@ -2,11 +2,15 @@ package zoidberg
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+var ErrNoMesosMaster = errors.New("mesos master not found")
 
 type refinedMesosTask struct {
 	Name   string
@@ -18,6 +22,8 @@ type refinedMesosTask struct {
 type mesosState struct {
 	Frameworks []mesosFramework `json:"frameworks"`
 	Slaves     []mesosSlave     `json:"slaves"`
+	Pid        string           `json:"pid"`
+	Leader     string           `json:"leader"`
 }
 
 type mesosFramework struct {
@@ -166,22 +172,34 @@ func (m MesosDiscoverer) apps(tasks []refinedMesosTask) Apps {
 }
 
 func (m MesosDiscoverer) tasks() ([]refinedMesosTask, error) {
-	// TODO: ask some master, check if it is leading
-	// TODO: if it is not leading master, go to leading
-	// TODO: fail if leading master is actually empty
-	resp, err := http.Get(m.masters[0] + "/state.json")
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
 	s := mesosState{}
-	err = json.NewDecoder(resp.Body).Decode(&s)
-	if err != nil {
-		return nil, err
+
+	for _, master := range m.masters {
+		resp, err := http.Get(master + "/state.json")
+		if err != nil {
+			log.Printf("error fetching state from %s: %s\n", master, err)
+			continue
+		}
+
+		defer resp.Body.Close()
+
+		err = json.NewDecoder(resp.Body).Decode(&s)
+		if err != nil {
+			log.Printf("error decoding state from %s: %s\n", master, err)
+			continue
+		}
+
+		if s.Pid != s.Leader {
+			continue
+		}
+
+		return m.tasksFromLeader(s)
 	}
 
+	return nil, ErrNoMesosMaster
+}
+
+func (m MesosDiscoverer) tasksFromLeader(s mesosState) ([]refinedMesosTask, error) {
 	hosts := map[string]string{}
 	for _, s := range s.Slaves {
 		hosts[s.ID] = s.Host
