@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"github.com/samuel/go-zookeeper/zk"
 )
@@ -36,7 +36,7 @@ func NewExplorer(d Discoverer, zc *zk.Conn, zp string, location ExplorerLocation
 			return nil, err
 		}
 
-		state.Versions = map[string][]Version{}
+		state.Versions = map[string]Versions{}
 	} else {
 		err := json.Unmarshal(ss, &state)
 		if err != nil {
@@ -96,7 +96,7 @@ func (e *Explorer) getState() State {
 	return s
 }
 
-func (e *Explorer) setVersions(app string, versions []Version) {
+func (e *Explorer) setVersions(app string, versions Versions) {
 	e.mutex.Lock()
 	e.state.Versions[app] = versions
 	e.mutex.Unlock()
@@ -147,7 +147,7 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 		}
 
 		d := json.NewDecoder(req.Body)
-		v := []Version{}
+		v := Versions{}
 		err := d.Decode(&v)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("version decoding failed: %s", err), http.StatusBadRequest)

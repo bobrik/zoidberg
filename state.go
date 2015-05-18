@@ -1,8 +1,10 @@
 package zoidberg
 
 type State struct {
-	Versions map[string][]Version `json:"versions"`
+	Versions map[string]Versions `json:"versions"`
 }
+
+type Versions map[string]Version
 
 type Version struct {
 	Name string `json:"name"`
