@@ -95,12 +95,12 @@ to implement the next HTTP API:
   },
   "state": {
     "versions": {
-      "myapp": [
-        {
+      "myapp": {
+        "/v1": {
           "name": "/v1",
           "weight": 2
         }
-      ]
+      }
     }
   },
   "explorer": {
@@ -126,12 +126,12 @@ Explorer provides the next HTTP API:
 * `PUT /versions/{{app}}` or `POST /versions/{{app}}` with json like this:
 
 ```json
-[
-  {
+{
+  "/v1": {
     "name": "/v1",
     "weight": 2
   }
-]
+}
 ```
 
 `{{app}}` in URL should be replaced with the name of an actual app.
