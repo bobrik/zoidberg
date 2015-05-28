@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/bobrik/zoidberg/cmd/marathon-explorer",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/gambol99/go-marathon",
+			"Rev": "980b2a4e8f97422786f55bb777597a174fec2677"
+		},
+		{
+			"ImportPath": "github.com/samuel/go-zookeeper/zk",
+			"Rev": "d0e0d8e11f318e000a8cc434616d69e329edc374"
+		}
+	]
+}
