@@ -1,8 +1,8 @@
 package zoidberg
 
 import (
-	"fmt"
-	"strings"
+	"log"
+	"strconv"
 
 	"github.com/gambol99/go-marathon"
 )
@@ -10,14 +10,12 @@ import (
 type MarathonDiscoverer struct {
 	m        marathon.Marathon
 	balancer string
-	groups   []string
 }
 
-func NewMarathonDiscoverer(m marathon.Marathon, balancer string, groups []string) MarathonDiscoverer {
+func NewMarathonDiscoverer(m marathon.Marathon, balancer string) MarathonDiscoverer {
 	return MarathonDiscoverer{
 		m:        m,
 		balancer: balancer,
-		groups:   groups,
 	}
 }
 
@@ -41,17 +39,23 @@ func (m MarathonDiscoverer) Discover() (Discovery, error) {
 }
 
 func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
-	app, err := m.m.Application(m.balancer)
+	ma, err := m.m.Applications("embed=apps.tasks&label=zoidberg_balancer_for==" + m.balancer)
 	if err != nil {
 		return nil, err
 	}
 
-	balancers := make([]Balancer, len(app.Tasks))
+	balancers := []Balancer{}
+	for _, app := range ma.Apps {
+		if len(app.Ports) == 0 {
+			log.Printf("app %s has no ports\n", app.ID)
+			continue
+		}
 
-	for i, task := range app.Tasks {
-		balancers[i] = Balancer{
-			Host: task.Host,
-			Port: task.Ports[0],
+		for _, task := range app.Tasks {
+			balancers = append(balancers, Balancer{
+				Host: task.Host,
+				Port: task.Ports[0],
+			})
 		}
 	}
 
@@ -59,58 +63,50 @@ func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
 }
 
 func (m MarathonDiscoverer) apps() (Apps, error) {
+	ma, err := m.m.Applications("embed=apps.tasks&label=zoidberg_balanced_by==" + m.balancer)
+	if err != nil {
+		return nil, err
+	}
+
 	apps := map[string]App{}
 
-	for _, group := range m.groups {
-		app, err := m.app(group)
-		if err != nil {
-			return nil, err
+	for _, a := range ma.Apps {
+		name := a.Labels["zoidberg_app_name"]
+		if name == "" {
+			log.Printf("app %s has no label zoidberg_app_name\n", a.ID)
+			continue
 		}
 
-		apps[app.Name] = app
+		version := a.Labels["zoidberg_app_version"]
+		if version == "" {
+			log.Printf("app %s has no label zoidberg_app_version\n", a.ID)
+			continue
+		}
+
+		app := apps[name]
+		if app.Name == "" {
+			p := a.Labels["zoidberg_app_port"]
+			port, err := strconv.Atoi(p)
+			if err != nil {
+				log.Printf("app %s has invalid zoidberg_app_port: %q, %s\n", a.ID, p, err)
+				continue
+			}
+
+			app.Name = name
+			app.Port = port
+		}
+
+		for _, task := range a.Tasks {
+			app.Servers = append(app.Servers, Server{
+				Version: version,
+				Host:    task.Host,
+				Port:    task.Ports[0],
+				Ports:   task.Ports,
+			})
+		}
+
+		apps[name] = app
 	}
 
 	return apps, nil
-}
-
-func (m MarathonDiscoverer) app(group string) (App, error) {
-	g, err := m.m.Group(group)
-	if err != nil {
-		return App{}, err
-	}
-
-	application := App{
-		Servers: []Server{},
-	}
-
-	for _, app := range g.Apps {
-		app, err := m.m.Application(app.ID)
-		if err != nil {
-			return App{}, err
-		}
-
-		// first app contributes name and port, they should be the same anyway
-		if application.Name == "" {
-			if name, ok := app.Labels["zoidberg_app_name"]; ok {
-				application.Name = name
-				application.Port = app.Ports[0] // TODO: maybe all of them?
-			}
-		}
-
-		version := strings.TrimPrefix(app.ID, g.ID)
-
-		for _, task := range app.Tasks {
-			application.Servers = append(application.Servers, Server{
-				Version: version,
-				Host:    task.Host,
-				Port:    task.Ports[0], // TODO: maybe all of them?
-			})
-		}
-	}
-
-	if application.Name == "" {
-		return App{}, fmt.Errorf("application name not discovered for %q", group)
-	}
-
-	return application, nil
 }
