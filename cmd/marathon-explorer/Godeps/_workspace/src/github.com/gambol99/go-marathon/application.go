@@ -241,9 +241,9 @@ func (application *Application) CheckTCP(port, interval int) (*Application, erro
 }
 
 // Retrieve an array of all the applications which are running in marathon
-func (client *Client) Applications() (*Applications, error) {
+func (client *Client) Applications(query string) (*Applications, error) {
 	applications := new(Applications)
-	if err := client.apiGet(MARATHON_API_APPS, nil, applications); err != nil {
+	if err := client.apiGet(MARATHON_API_APPS + "?" + query, nil, applications); err != nil {
 		return nil, err
 	} else {
 		return applications, nil
@@ -252,7 +252,7 @@ func (client *Client) Applications() (*Applications, error) {
 
 // Retrieve an array of the application names currently running in marathon
 func (client *Client) ListApplications() ([]string, error) {
-	if applications, err := client.Applications(); err != nil {
+	if applications, err := client.Applications(""); err != nil {
 		return nil, err
 	} else {
 		list := make([]string, 0)

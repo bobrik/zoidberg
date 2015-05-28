@@ -62,7 +62,7 @@ type Marathon interface {
 	/* restart an application */
 	RestartApplication(name string, force bool) (*DeploymentID, error)
 	/* get a list of applications from marathon */
-	Applications() (*Applications, error)
+	Applications(query string) (*Applications, error)
 	/* get a specific application */
 	Application(name string) (*Application, error)
 	/* wait of application */
