@@ -139,33 +139,37 @@ func (m MesosDiscoverer) apps(tasks []refinedMesosTask) Apps {
 
 		name := task.Labels["zoidberg_app_name"]
 		if name == "" {
+			log.Printf("task %s has no label zoidberg_app_version\n", task.Name)
 			continue
 		}
 
 		version := task.Labels["zoidberg_app_version"]
 		if version == "" {
+			log.Printf("task %s has no label zoidberg_app_version\n", task.Name)
 			continue
 		}
 
 		app := apps[name]
 		if app.Name == "" {
-			port, err := strconv.Atoi(task.Labels["zoidberg_app_port"])
-			if err == nil {
-				app.Name = name
-				app.Port = port
+			p := task.Labels["zoidberg_app_port"]
+			port, err := strconv.Atoi(p)
+			if err != nil {
+				log.Printf("task %s has invalid zoidberg_app_port: %q, %s\n", task.Name, p, err)
+				continue
 			}
+
+			app.Name = name
+			app.Port = port
 		}
 
 		app.Servers = append(app.Servers, Server{
 			Version: version,
 			Host:    task.Host,
 			Port:    task.Ports[0],
+			Ports:   task.Ports,
 		})
 
-		// port is valid, good to go
-		if app.Name != "" {
-			apps[name] = app
-		}
+		apps[name] = app
 	}
 
 	return apps

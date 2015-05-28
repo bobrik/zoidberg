@@ -17,12 +17,11 @@ import (
 
 func main() {
 	m := flag.String("marathon", "", "marathon url")
-	b := flag.String("balancer", "", "balancer app id")
-	g := flag.String("groups", "", "comma-separated groups that hold app versions")
+	b := flag.String("balancer", "", "balancer name")
 	z := flag.String("zk", "", "zk connection in host:port,host:port/path format")
 	flag.Parse()
 
-	if *m == "" || *b == "" || *g == "" || *z == "" {
+	if *m == "" || *b == "" || *z == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -71,7 +70,7 @@ func main() {
 		Port: port,
 	}
 
-	d := zoidberg.NewMarathonDiscoverer(mc, *b, strings.Split(*g, ","))
+	d := zoidberg.NewMarathonDiscoverer(mc, *b)
 
 	e, err := zoidberg.NewExplorer(d, zc, zp, l)
 	if err != nil {
