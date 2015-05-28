@@ -6,75 +6,80 @@ to version in small percentage to ensure smooth deployments. It also
 allows usual service discovery where it's up to framework how to
 schedule tasks to avoid downtime.
 
+## Stability
+
+Zoidberg is still experimental software. Don't expect it to work after
+you blindly upgrade it. Better stick to one version and upgrade carefully.
+
 ## Architecture
 
 Zoidberg consists of several parts:
+
+* Discoverer is responsible for discovering cluster state.
+* Load balancers are responsible for providing well known endpoints.
+* Explorer is bounded with discoverer and responsible for version management.
 
 ### Discoverer
 
 Discoverer is a mechanism to discover load balancers and application tasks.
 
+#### Label-based discoverers
+
+Both marathon and mesos discoverers are label base discoverers, which means
+that they rely on labels to discover current state.
+
+Used labels for apps:
+
+* `zoidberg_app_name` defines application name.
+* `zoidberg_app_version` defines application version.
+* `zoidberg_app_port` defines main port for application.
+* `zoidberg_balanced_by` defines load balancer name for application.
+
+Used labels for balancers:
+
+* `zoidberg_balancer_for` defines load balancer name.
+
+Several applications can be published to a single load balancer.
+
 #### Marathon discoverer
 
-Marathon discoverer provides service discovery for marathon.
-
-Balancer is provided as application id.
-
-Applications are provided as their root groups. Application groups should only
-hold application versions. Application name should be placed into
-label `zoidberg_app_name` to make application discoverable.
-
-Example:
-
-* `/whatever/balancer` app holds tasks for balancer.
-* `/whatever/app/v1` holds tasks for application version 1.
-
-If you want to perform slow upgrade, you should deploy `/whatever/app/v2` and
-shift traffic gradually with zoidberg API. If you are comfortable with rolling
-upgrade using marathon, feel free to redeploy `v1`.
+Marathon discoverer provides service discovery for Marathon.
+It reads cluster state from Marathon API, providing health check
+awareness, but it is also can be a bit slower with many Zoidberg instances.
 
 Running:
 
 ```
-HOST=127.0.0.1 PORT=12345 marathon-explorer \
-    -balancer /whatever/balancer \
-    -groups /whatever/app \
-    -marathon http://marathon:8080 \
-    -zk zk:2181/zoidberg-whaterver
+HOST=127.0.0.1 PORT=12345 docker run -rm -it bobrik/zoidberg:0.3.0 \
+    /go/bin/marathon-explorer -balancer mybalancer \
+    -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
 ```
 
-You can use comma-separated list of groups to discover multiple applications
-with single load balancer.
+For setup with several Marathon nodes you can use the following syntax:
+
+```
+http://marathon1:8080,marathon2:8080,marathon3:8080
+```
 
 #### Mesos discoverer
 
 Mesos discoverer provides service discovery for any framework running on mesos.
-
-Explorer is launched for specific named balancer.
-
-Balancer is discovered by label `zoidberg_balancer_for`.
-
-Applications are discovered by label `zoidberg_balanced_by`. Applications
-should have labels `zoidberg_app_name`, `zoidberg_app_version` and
-`zoidberg_app_port` to be discoverable.
-
-It is possible to run tasks on marathon to make them discoverable
-with both marathon and mesos discoverers.
+It reads cluster state from Mesos master and is unaware of health checks
+that can be defined in framework. It also doesn't support several masters.
 
 Running:
 
 ```
-HOST=127.0.0.1 PORT=12345 mesos-explorer \
- -balancer mybalancer \
- -master http://mesos-master:5050 \ 
- -zk zk:2181/zoidberg-mybalancer
+HOST=127.0.0.1 PORT=12345 docker run --rm -it bobrik/zoidberg:0.3.0 \
+    /go/bin/mesos-explorer -balancer mybalancer \
+    -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
 ```
 
 ### Load balancers
 
-Load balancers are responsible for providing service endpoints
-at well-known address and load balancing. Zoidberg requires balancers
-to implement the next HTTP API:
+Load balancers are responsible for providing service endpoints at well-known
+address and load balancing. Zoidberg requires balancers to implement
+the next HTTP API:
 
 * `PUT /state` or `POST /state` with json like this:
 
@@ -118,7 +123,7 @@ Explorer also exposes own location to use.
 
 ### Explorer
 
-Explorer is responsible for distributing state of mesos cluster to balancers.
+Explorer is responsible for distributing state of Mesos cluster to balancers.
 It is also responsible for switching traffic between application versions.
 
 Explorer provides the next HTTP API:
@@ -156,6 +161,7 @@ Explorer provides the next HTTP API:
         {
           "host": "192.168.0.7",
           "port": 31000,
+          "ports": [31000],
           "version": "/v1"
         }
       ]
