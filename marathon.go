@@ -97,6 +97,22 @@ func (m MarathonDiscoverer) apps() (Apps, error) {
 		}
 
 		for _, task := range a.Tasks {
+			healthy := true
+			for _, check := range task.HealthCheckResult {
+				if check == nil {
+					continue
+				}
+
+				if !check.Alive {
+					healthy = false
+					break
+				}
+			}
+
+			if !healthy {
+				continue
+			}
+
 			app.Servers = append(app.Servers, Server{
 				Version: version,
 				Host:    task.Host,
