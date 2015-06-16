@@ -6,6 +6,12 @@ to version in small percentage to ensure smooth deployments. It also
 allows usual service discovery where it's up to framework how to
 schedule tasks to avoid downtime.
 
+## Compatible load balancers
+
+* [zoidberg-nginx](https://github.com/bobrik/zoidberg-nginx)
+supports upstream list updates without spawning new workers,
+providing rich module ecosystem from nginx, including lua modules.
+
 ## Stability
 
 Zoidberg is still experimental software. Don't expect it to work after
