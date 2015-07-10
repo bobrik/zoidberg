@@ -134,6 +134,10 @@ func (e *Explorer) setUpZkPath(p string) error {
 	}
 
 	_, err = e.zookeeper.Create(p, []byte{}, 0, zk.WorldACL(zk.PermAll))
+	if err == zk.ErrNodeExists {
+		return nil
+	}
+
 	return err
 }
 
