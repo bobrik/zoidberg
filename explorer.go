@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -111,9 +112,28 @@ func (e *Explorer) persistState() error {
 
 	_, err = e.zookeeper.Set(e.zp, b, -1)
 	if err == zk.ErrNoNode {
+		err = e.setUpZkPath(path.Dir(e.zp))
+		if err != nil {
+			return err
+		}
+
 		_, err = e.zookeeper.Create(e.zp, b, 0, zk.WorldACL(zk.PermAll))
 	}
 
+	return err
+}
+
+func (e *Explorer) setUpZkPath(p string) error {
+	if p == "/" {
+		return nil
+	}
+
+	err := e.setUpZkPath(path.Dir(p))
+	if err != nil {
+		return nil
+	}
+
+	_, err = e.zookeeper.Create(p, []byte{}, 0, zk.WorldACL(zk.PermAll))
 	return err
 }
 
