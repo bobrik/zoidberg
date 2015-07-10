@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func main() {
 	zz := strings.SplitN(*z, "/", 2)
 
 	zh, zp := zz[0], "/"+zz[1]
-	log.Println(zh, zp)
+	zp = path.Clean(zp)
 
 	zc, zch, err := zk.Connect(strings.Split(zh, ","), time.Minute)
 	if err != nil {
