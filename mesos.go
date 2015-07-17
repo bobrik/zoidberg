@@ -151,15 +151,7 @@ func (m MesosDiscoverer) apps(tasks []refinedMesosTask) Apps {
 
 		app := apps[name]
 		if app.Name == "" {
-			p := task.Labels["zoidberg_app_port"]
-			port, err := strconv.Atoi(p)
-			if err != nil {
-				log.Printf("task %s has invalid zoidberg_app_port: %q, %s\n", task.Name, p, err)
-				continue
-			}
-
 			app.Name = name
-			app.Port = port
 		}
 
 		app.Servers = append(app.Servers, Server{

@@ -2,7 +2,6 @@ package zoidberg
 
 import (
 	"log"
-	"strconv"
 
 	"github.com/gambol99/go-marathon"
 )
@@ -85,15 +84,7 @@ func (m MarathonDiscoverer) apps() (Apps, error) {
 
 		app := apps[name]
 		if app.Name == "" {
-			p := a.Labels["zoidberg_app_port"]
-			port, err := strconv.Atoi(p)
-			if err != nil {
-				log.Printf("app %s has invalid zoidberg_app_port: %q, %s\n", a.ID, p, err)
-				continue
-			}
-
 			app.Name = name
-			app.Port = port
 		}
 
 		for _, task := range a.Tasks {

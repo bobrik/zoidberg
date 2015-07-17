@@ -14,8 +14,8 @@ providing rich module ecosystem from nginx, including lua modules.
 
 ## Stability
 
-Zoidberg is still experimental software. Don't expect it to work after
-you blindly upgrade it. Better stick to one version and upgrade carefully.
+Even though zoidberg is deployed at scale (think 100s of mesos-slaves),
+it is still stabilizing. Please see release notes before upgrading.
 
 ## Architecture
 
@@ -38,7 +38,6 @@ Used labels for apps:
 
 * `zoidberg_app_name` defines application name.
 * `zoidberg_app_version` defines application version.
-* `zoidberg_app_port` defines main port for application.
 * `zoidberg_balanced_by` defines load balancer name for application.
 
 Used labels for balancers:
@@ -58,7 +57,7 @@ Running:
 ```
 docker run -rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.3.2 \
     /go/bin/marathon-explorer -balancer mybalancer \
-    -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
+    -name main -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
 ```
 
 For setup with several Marathon nodes you can use the following syntax:
@@ -78,7 +77,7 @@ Running:
 ```
 docker run --rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.3.2 \
     /go/bin/mesos-explorer -balancer mybalancer \
-    -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
+    -name main -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
 ```
 
 ### Load balancers
@@ -94,12 +93,11 @@ the next HTTP API:
   "apps": {
     "myapp": {
       "name": "myapp",
-      "port": 13131,
       "servers": [
         {
           "host": "192.168.0.7",
           "port": 31633,
-          "version": "/v1"
+          "version": "1"
         }
       ]
     }
@@ -107,16 +105,11 @@ the next HTTP API:
   "state": {
     "versions": {
       "myapp": {
-        "/v1": {
-          "name": "/v1",
+        "1": {
           "weight": 2
         }
       }
     }
-  },
-  "explorer": {
-    "host": "127.0.0.1",
-    "port": 38999
   }
 }
 ```
@@ -138,8 +131,7 @@ Explorer provides the next HTTP API:
 
 ```json
 {
-  "/v1": {
-    "name": "/v1",
+  "1": {
     "weight": 2
   }
 }
@@ -147,7 +139,7 @@ Explorer provides the next HTTP API:
 
 `{{app}}` in URL should be replaced with the name of an actual app.
 
-* `GET /state` that returns full state
+* `GET /state` that returns full state (all set versions).
 
 * `GET /discovery` that returns json like this:
 
@@ -162,13 +154,12 @@ Explorer provides the next HTTP API:
   "apps": {
     "myapp": {
       "name": "myapp",
-      "port": 13131,
       "servers": [
         {
           "host": "192.168.0.7",
           "port": 31000,
           "ports": [31000],
-          "version": "/v1"
+          "version": "1"
         }
       ]
     }

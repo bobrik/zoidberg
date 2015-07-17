@@ -16,12 +16,13 @@ import (
 )
 
 func main() {
+	n := flag.String("name", "", "zoidberg name")
 	m := flag.String("marathon", "", "marathon url")
 	b := flag.String("balancer", "", "balancer name")
 	z := flag.String("zk", "", "zk connection in host:port,host:port/path format")
 	flag.Parse()
 
-	if *m == "" || *b == "" || *z == "" {
+	if *n == "" || *m == "" || *b == "" || *z == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -65,14 +66,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	l := zoidberg.ExplorerLocation{
-		Host: host,
-		Port: port,
-	}
-
 	d := zoidberg.NewMarathonDiscoverer(mc, *b)
 
-	e, err := zoidberg.NewExplorer(d, zc, zp, l)
+	e, err := zoidberg.NewExplorer(*n, d, zc, zp)
 	if err != nil {
 		log.Fatal(err)
 	}
