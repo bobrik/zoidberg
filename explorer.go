@@ -14,21 +14,16 @@ import (
 )
 
 type Explorer struct {
+	name       string
 	discoverer Discoverer
 	zookeeper  *zk.Conn
 	zp         string
 	state      State
-	location   ExplorerLocation
 	err        error
 	mutex      sync.Mutex
 }
 
-type ExplorerLocation struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-}
-
-func NewExplorer(d Discoverer, zc *zk.Conn, zp string, location ExplorerLocation) (*Explorer, error) {
+func NewExplorer(name string, d Discoverer, zc *zk.Conn, zp string) (*Explorer, error) {
 	state := State{}
 
 	ss, _, err := zc.Get(zp)
@@ -46,11 +41,11 @@ func NewExplorer(d Discoverer, zc *zk.Conn, zp string, location ExplorerLocation
 	}
 
 	return &Explorer{
+		name:       name,
 		discoverer: d,
 		zookeeper:  zc,
 		zp:         zp,
 		state:      state,
-		location:   location,
 		mutex:      sync.Mutex{},
 	}, nil
 }
@@ -79,7 +74,7 @@ func (e *Explorer) updateBalancers(discovery Discovery) {
 	state := e.getState()
 
 	for _, b := range discovery.Balancers {
-		err := b.update(discovery.Apps, state, e.location)
+		err := b.update(e.name, discovery.Apps, state)
 		if err != nil {
 			log.Printf("error updating state on %s: %s\n", b, err)
 			continue

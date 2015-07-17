@@ -13,23 +13,21 @@ type Balancer struct {
 }
 
 type balancerState struct {
-	Apps     Apps             `json:"apps"`
-	State    State            `json:"state"`
-	Explorer ExplorerLocation `json:"explorer"`
+	Apps  Apps  `json:"apps"`
+	State State `json:"state"`
 }
 
-func (b Balancer) update(apps Apps, state State, location ExplorerLocation) error {
+func (b Balancer) update(name string, apps Apps, state State) error {
 	body, err := json.Marshal(balancerState{
-		Apps:     apps,
-		State:    state,
-		Explorer: location,
+		Apps:  apps,
+		State: state,
 	})
 
 	if err != nil {
 		return err
 	}
 
-	u := fmt.Sprintf("http://%s:%d/state", b.Host, b.Port)
+	u := fmt.Sprintf("http://%s:%d/state/%s", b.Host, b.Port, name)
 	resp, err := http.Post(u, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err

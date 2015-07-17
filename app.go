@@ -2,7 +2,6 @@ package zoidberg
 
 type App struct {
 	Name    string   `json:"name"`
-	Port    int      `json:"port"`
 	Servers []Server `json:"servers"`
 }
 
