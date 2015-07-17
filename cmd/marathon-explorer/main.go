@@ -19,6 +19,7 @@ func main() {
 	n := flag.String("name", "", "zoidberg name")
 	m := flag.String("marathon", "", "marathon url")
 	b := flag.String("balancer", "", "balancer name")
+	s := flag.String("servers", "", "static list of servers to use as balancers")
 	z := flag.String("zk", "", "zk connection in host:port,host:port/path format")
 	flag.Parse()
 
@@ -45,7 +46,6 @@ func main() {
 	zz := strings.SplitN(*z, "/", 2)
 
 	zh, zp := zz[0], "/"+zz[1]
-	log.Println(zh, zp)
 
 	zc, zch, err := zk.Connect(strings.Split(zh, ","), time.Minute)
 	if err != nil {
@@ -67,6 +67,15 @@ func main() {
 	}
 
 	d := zoidberg.NewMarathonDiscoverer(mc, *b)
+
+	balancers, err := zoidberg.BalancersFromString(*s)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if balancers != nil {
+		d.SetStaticBalancers(balancers)
+	}
 
 	e, err := zoidberg.NewExplorer(*n, d, zc, zp)
 	if err != nil {

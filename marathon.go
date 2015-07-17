@@ -9,13 +9,18 @@ import (
 type MarathonDiscoverer struct {
 	m        marathon.Marathon
 	balancer string
+	static   []Balancer
 }
 
-func NewMarathonDiscoverer(m marathon.Marathon, balancer string) MarathonDiscoverer {
+func NewMarathonDiscoverer(m marathon.Marathon, b string) MarathonDiscoverer {
 	return MarathonDiscoverer{
 		m:        m,
-		balancer: balancer,
+		balancer: b,
 	}
+}
+
+func (m *MarathonDiscoverer) SetStaticBalancers(b []Balancer) {
+	m.static = b
 }
 
 func (m MarathonDiscoverer) Discover() (Discovery, error) {
@@ -38,6 +43,10 @@ func (m MarathonDiscoverer) Discover() (Discovery, error) {
 }
 
 func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
+	if m.static != nil {
+		return m.static, nil
+	}
+
 	ma, err := m.m.Applications("embed=apps.tasks&label=zoidberg_balancer_for==" + m.balancer)
 	if err != nil {
 		return nil, err

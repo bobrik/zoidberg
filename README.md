@@ -66,6 +66,9 @@ For setup with several Marathon nodes you can use the following syntax:
 http://marathon1:8080,marathon2:8080,marathon3:8080
 ```
 
+Marathon discoverer supports static list of load balancers with `-servers`
+option. Syntax is `host:port[,host:port]`.
+
 #### Mesos discoverer
 
 Mesos discoverer provides service discovery for any framework running on mesos.

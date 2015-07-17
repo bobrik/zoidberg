@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 type Balancer struct {
@@ -40,4 +43,40 @@ func (b Balancer) update(name string, apps Apps, state State) error {
 
 func (b Balancer) String() string {
 	return fmt.Sprintf("%s:%d", b.Host, b.Port)
+}
+
+func BalancersFromString(s string) ([]Balancer, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	h := strings.Split(s, ",")
+	r := make([]Balancer, len(h))
+
+	for i, hp := range h {
+		b, err := balancerFromString(hp)
+		if err != nil {
+			return nil, err
+		}
+
+		r[i] = b
+	}
+
+	return r, nil
+}
+
+func balancerFromString(s string) (Balancer, error) {
+	b := Balancer{}
+
+	h, p, err := net.SplitHostPort(s)
+	if err != nil {
+		return b, err
+	}
+
+	port, err := strconv.Atoi(p)
+
+	b.Host = h
+	b.Port = port
+
+	return b, nil
 }
