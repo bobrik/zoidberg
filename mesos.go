@@ -152,6 +152,7 @@ func (m MesosDiscoverer) apps(tasks []refinedMesosTask) Apps {
 		app := apps[name]
 		if app.Name == "" {
 			app.Name = name
+			app.Servers = []Server{}
 		}
 
 		app.Servers = append(app.Servers, Server{

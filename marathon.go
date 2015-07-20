@@ -94,6 +94,7 @@ func (m MarathonDiscoverer) apps() (Apps, error) {
 		app := apps[name]
 		if app.Name == "" {
 			app.Name = name
+			app.Servers = []Server{}
 		}
 
 		for _, task := range a.Tasks {
