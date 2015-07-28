@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Balancer struct {
@@ -30,8 +31,12 @@ func (b Balancer) update(name string, apps Apps, state State) error {
 		return err
 	}
 
+	c := http.Client{
+		Timeout: time.Second * 5,
+	}
+
 	u := fmt.Sprintf("http://%s:%d/state/%s", b.Host, b.Port, name)
-	resp, err := http.Post(u, "application/json", bytes.NewReader(body))
+	resp, err := c.Post(u, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
