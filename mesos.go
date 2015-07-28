@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var ErrNoMesosMaster = errors.New("mesos master not found")
@@ -91,12 +92,16 @@ func (mp *mesosPorts) UnmarshalJSON(b []byte) error {
 type MesosDiscoverer struct {
 	masters  []string
 	balancer string
+	client   http.Client
 }
 
 func NewMesosDiscoverer(masters []string, balancer string) MesosDiscoverer {
 	return MesosDiscoverer{
 		masters:  masters,
 		balancer: balancer,
+		client: http.Client{
+			Timeout: time.Second * 5,
+		},
 	}
 }
 
@@ -172,7 +177,7 @@ func (m MesosDiscoverer) tasks() ([]refinedMesosTask, error) {
 	s := mesosState{}
 
 	for _, master := range m.masters {
-		resp, err := http.Get(master + "/state.json")
+		resp, err := m.client.Get(master + "/state.json")
 		if err != nil {
 			log.Printf("error fetching state from %s: %s\n", master, err)
 			continue
