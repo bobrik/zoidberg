@@ -73,15 +73,22 @@ func (e *Explorer) setError(err error) {
 func (e *Explorer) updateBalancers(discovery Discovery) {
 	state := e.getState()
 
-	for _, b := range discovery.Balancers {
-		err := b.update(e.name, discovery.Apps, state)
-		if err != nil {
-			log.Printf("error updating state on %s: %s\n", b, err)
-			continue
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(len(discovery.Balancers))
 
-		log.Println("updated state on", b)
+	for _, b := range discovery.Balancers {
+		go func() {
+			defer wg.Done()
+
+			err := b.update(e.name, discovery.Apps, state)
+			if err != nil {
+				log.Printf("error updating state on %s: %s\n", b, err)
+				return
+			}
+		}()
 	}
+
+	wg.Wait()
 }
 
 func (e *Explorer) getState() State {
