@@ -2,6 +2,7 @@ package zoidberg
 
 import (
 	"log"
+	"net/url"
 
 	"github.com/gambol99/go-marathon"
 )
@@ -47,7 +48,10 @@ func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
 		return m.static, nil
 	}
 
-	ma, err := m.m.Applications("embed=apps.tasks&label=zoidberg_balancer_for==" + m.balancer)
+	mv := url.Values{}
+	mv.Set("embed", "apps.tasks")
+	mv.Set("label", "zoidberg_balancer_for=="+m.balancer)
+	ma, err := m.m.Applications(mv)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +75,10 @@ func (m MarathonDiscoverer) balancers() ([]Balancer, error) {
 }
 
 func (m MarathonDiscoverer) apps() (Apps, error) {
-	ma, err := m.m.Applications("embed=apps.tasks&label=zoidberg_balanced_by==" + m.balancer)
+	mv := url.Values{}
+	mv.Set("embed", "apps.tasks")
+	mv.Set("label", "zoidberg_balanced_by=="+m.balancer)
+	ma, err := m.m.Applications(mv)
 	if err != nil {
 		return nil, err
 	}

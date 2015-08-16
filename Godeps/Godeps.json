@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/bobrik/zoidberg",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/gambol99/go-marathon",
+			"Rev": "99e84403da1fe333cff55d94aac4ec33a917a559"
+		},
+		{
+			"ImportPath": "github.com/samuel/go-zookeeper/zk",
+			"Rev": "5bb5cfc093ad18a28148c578f8632cfdb4d802e4"
+		}
+	]
+}
