@@ -55,9 +55,9 @@ awareness, but it is also can be a bit slower with many Zoidberg instances.
 Running:
 
 ```
-docker run -rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.3.2 \
-    /go/bin/marathon-explorer -balancer mybalancer \
-    -name main -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
+docker run -rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.4.3 \
+    /go/bin/marathon-explorer -balancer mybalancer -name main \
+    -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
 ```
 
 For setup with several Marathon nodes you can use the following syntax:
@@ -78,9 +78,9 @@ that can be defined in framework. It also doesn't support several masters.
 Running:
 
 ```
-docker run --rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.3.2 \
-    /go/bin/mesos-explorer -balancer mybalancer \
-    -name main -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
+docker run --rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.4.3 \
+    /go/bin/mesos-explorer -balancer mybalancer -name main \
+    -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
 ```
 
 ### Load balancers
