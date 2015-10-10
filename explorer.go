@@ -77,7 +77,7 @@ func (e *Explorer) updateBalancers(discovery Discovery) {
 	wg.Add(len(discovery.Balancers))
 
 	for _, b := range discovery.Balancers {
-		go func() {
+		go func(b Balancer) {
 			defer wg.Done()
 
 			err := b.update(e.name, discovery.Apps, state)
@@ -85,7 +85,7 @@ func (e *Explorer) updateBalancers(discovery Discovery) {
 				log.Printf("error updating state on %s: %s\n", b, err)
 				return
 			}
-		}()
+		}(b)
 	}
 
 	wg.Wait()
