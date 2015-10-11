@@ -10,21 +10,28 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bobrik/zoidberg/application"
+	"github.com/bobrik/zoidberg/balancer"
+	"github.com/bobrik/zoidberg/state"
 	"github.com/samuel/go-zookeeper/zk"
 )
 
+// Explorer constantly updates cluster state and notifies Balancers
 type Explorer struct {
-	name       string
-	discoverer Discoverer
-	zookeeper  *zk.Conn
-	zp         string
-	state      State
-	err        error
-	mutex      sync.Mutex
+	name      string
+	af        application.Finder
+	bf        balancer.Finder
+	zookeeper *zk.Conn
+	zp        string
+	state     state.State
+	mutex     sync.Mutex
 }
 
-func NewExplorer(name string, d Discoverer, zc *zk.Conn, zp string) (*Explorer, error) {
-	state := State{}
+// NewExplorer creates a new Explorer instance with a name,
+// application and balancer finders and zookeeper connection
+// to persist versioning information
+func NewExplorer(name string, af application.Finder, bf balancer.Finder, zc *zk.Conn, zp string) (*Explorer, error) {
+	s := state.State{}
 
 	ss, _, err := zc.Get(zp)
 	if err != nil {
@@ -32,31 +39,34 @@ func NewExplorer(name string, d Discoverer, zc *zk.Conn, zp string) (*Explorer, 
 			return nil, err
 		}
 
-		state.Versions = map[string]Versions{}
+		s.Versions = map[string]state.Versions{}
 	} else {
-		err := json.Unmarshal(ss, &state)
+		err := json.Unmarshal(ss, &s)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &Explorer{
-		name:       name,
-		discoverer: d,
-		zookeeper:  zc,
-		zp:         zp,
-		state:      state,
-		mutex:      sync.Mutex{},
+		name:      name,
+		af:        af,
+		bf:        bf,
+		zookeeper: zc,
+		zp:        zp,
+		state:     s,
+		mutex:     sync.Mutex{},
 	}, nil
 }
 
+// Run launches explorer's main loop that fetches state
+// and updates load balancers' state
 func (e *Explorer) Run() error {
 	for {
 		time.Sleep(time.Second)
 
-		d, err := e.discoverer.Discover()
+		d, err := e.discover()
 		if err != nil {
-			log.Println("error discovering:", err)
+			log.Fatal("error discovering:", err)
 			continue
 		}
 
@@ -64,23 +74,37 @@ func (e *Explorer) Run() error {
 	}
 }
 
-func (e *Explorer) setError(err error) {
-	e.mutex.Lock()
-	e.err = err
-	e.mutex.Unlock()
+// discover returns the current view of the world
+func (e *Explorer) discover() (*Discovery, error) {
+	a, err := e.af.Apps()
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := e.bf.Balancers()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Discovery{
+		Balancers: b,
+		Apps:      a,
+	}, nil
 }
 
-func (e *Explorer) updateBalancers(discovery Discovery) {
+// updateBalancers updates state of all load balancers
+// in parallel with the specified discovery information
+func (e *Explorer) updateBalancers(discovery *Discovery) {
 	state := e.getState()
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(discovery.Balancers))
 
 	for _, b := range discovery.Balancers {
-		go func(b Balancer) {
+		go func(b balancer.Balancer) {
 			defer wg.Done()
 
-			err := b.update(e.name, discovery.Apps, state)
+			err := b.Update(e.name, discovery.Apps, state)
 			if err != nil {
 				log.Printf("error updating state on %s: %s\n", b, err)
 				return
@@ -91,7 +115,8 @@ func (e *Explorer) updateBalancers(discovery Discovery) {
 	wg.Wait()
 }
 
-func (e *Explorer) getState() State {
+// getState returns the current state of the world
+func (e *Explorer) getState() state.State {
 	e.mutex.Lock()
 	s := e.state
 	e.mutex.Unlock()
@@ -99,12 +124,14 @@ func (e *Explorer) getState() State {
 	return s
 }
 
-func (e *Explorer) setVersions(app string, versions Versions) {
+// setVersions sets version information for the specified application
+func (e *Explorer) setVersions(app string, versions state.Versions) {
 	e.mutex.Lock()
 	e.state.Versions[app] = versions
 	e.mutex.Unlock()
 }
 
+// persistState persists version state in zookeeper
 func (e *Explorer) persistState() error {
 	s := e.getState()
 	b, err := json.Marshal(s)
@@ -125,6 +152,7 @@ func (e *Explorer) persistState() error {
 	return err
 }
 
+// setUpZkPath initializes zookeeper if needed
 func (e *Explorer) setUpZkPath(p string) error {
 	if p == "/" {
 		return nil
@@ -143,17 +171,12 @@ func (e *Explorer) setUpZkPath(p string) error {
 	return err
 }
 
+// ServeMux returns explorer's api server
 func (e *Explorer) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/_health", func(w http.ResponseWriter, req *http.Request) {
-		e.mutex.Lock()
-		defer e.mutex.Unlock()
-		if e.err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/state", func(w http.ResponseWriter, req *http.Request) {
@@ -163,7 +186,10 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 		}
 
 		w.Header().Add("Content-type", "application/json")
-		json.NewEncoder(w).Encode(e.getState())
+		err := json.NewEncoder(w).Encode(e.getState())
+		if err != nil {
+			log.Println("error sending state:", err)
+		}
 	})
 
 	mux.HandleFunc("/versions/", func(w http.ResponseWriter, req *http.Request) {
@@ -173,7 +199,7 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 		}
 
 		d := json.NewDecoder(req.Body)
-		v := Versions{}
+		v := state.Versions{}
 		err := d.Decode(&v)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("version decoding failed: %s", err), http.StatusBadRequest)
@@ -197,14 +223,17 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 	})
 
 	mux.HandleFunc("/discovery", func(w http.ResponseWriter, req *http.Request) {
-		d, err := e.discoverer.Discover()
+		d, err := e.discover()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error getting servers: %s", err), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Add("Content-type", "application/json")
-		json.NewEncoder(w).Encode(d)
+		err = json.NewEncoder(w).Encode(d)
+		if err != nil {
+			log.Println("error sending discovery:", err)
+		}
 	})
 
 	return mux

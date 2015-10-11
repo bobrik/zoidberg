@@ -1,0 +1,90 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"errors"
+
+	"github.com/bobrik/zoidberg"
+	"github.com/bobrik/zoidberg/application"
+	"github.com/bobrik/zoidberg/balancer"
+	"github.com/samuel/go-zookeeper/zk"
+)
+
+func main() {
+	n := flag.String("name", os.Getenv("NAME"), "zoidberg name")
+	h := flag.String("host", os.Getenv("HOST"), "host")
+	p := flag.String("port", os.Getenv("PORT"), "port")
+	bff := flag.String("balancer-finder", os.Getenv("BALANCER_FINDER"), "balancer finder")
+	aff := flag.String("application-finder", os.Getenv("APPLICATION_FINDER"), "application finder")
+	z := flag.String("zk", os.Getenv("ZK"), "zk connection in host:port,host:port/path format")
+
+	flag.Parse()
+
+	if *bff == "" || *aff == "" || *h == "" || *p == "" || *z == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	bf, err := balancer.FinderByName(*bff)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	af, err := application.FinderByName(*aff)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	zc, zp, err := initZK(*z)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	e, err := zoidberg.NewExplorer(*n, af, bf, zc, zp)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		addr := fmt.Sprintf("%s:%s", *h, *p)
+		err := http.ListenAndServe(addr, e.ServeMux())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	err = e.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func initZK(z string) (*zk.Conn, string, error) {
+	if !strings.Contains(z, "/") {
+		return nil, "", errors.New("zk connection string is invalid")
+	}
+
+	zz := strings.SplitN(z, "/", 2)
+
+	zh, zp := zz[0], "/"+zz[1]
+
+	zc, zch, err := zk.Connect(strings.Split(zh, ","), time.Minute)
+	if err != nil {
+		return nil, "", err
+	}
+
+	go func() {
+		for e := range zch {
+			log.Println("received zk event:", e)
+		}
+	}()
+
+	return zc, zp, nil
+}
