@@ -1,8 +1,8 @@
 # Zoidberg
 
-Zoidberg provides per-app service discovery for mesos with pluggable
+Zoidberg provides per app service discovery for Mesos with pluggable
 discovery mechanisms. It allows you to shift traffic from version
-to version in small percentage to ensure smooth deployments. It also
+to version in small percentages to ensure smooth deployments. It also
 allows usual service discovery where it's up to framework how to
 schedule tasks to avoid downtime.
 
@@ -14,121 +14,134 @@ providing rich module ecosystem from nginx, including lua modules.
 
 ## Stability
 
-Even though zoidberg is deployed at scale (think 100s of mesos-slaves),
+Even though Zoidberg is deployed at scale (think 100s of Mesos slaves),
 it is still stabilizing. Please see release notes before upgrading.
 
 ## Architecture
 
 Zoidberg consists of several parts:
 
-* Discoverer is responsible for discovering cluster state.
+* Application finders responsible for finding apps.
+* Load balancer firnders responsible for finding load balancers.
 * Load balancers are responsible for providing well known endpoints.
 * Explorer is bounded with discoverer and responsible for version management.
 
-### Discoverer
+It is possible to run several independent Zoidberg instances on a single cluster.
+Each Zoidberg instance is only responsible for making sure that his group of
+load balancers knows about current state of application. Different Zoidberg instances
+can manage a single or completely independent groups of load balancers.
 
-Discoverer is a mechanism to discover load balancers and application tasks.
+### Finders
 
-#### Label-based discoverers
+Finder is a mechanism to discover load balancers and application tasks.
 
-Both marathon and mesos discoverers are label base discoverers, which means
-that they rely on labels to discover current state.
+### Application finders
 
-Used labels for apps:
+Application finders discover apps running on your cluster.
+
+The following application finders are available:
+
+* `marathon`
+* `mesos`
+
+You must specify application finder with `-application-finder` cli argument.
+
+#### Mesos and Marathon finders
+
+Both `marathon` and `mesos` finders are label based finders, which means
+that they rely on labels to discover applications running on the cluster.
+
+Make sure to use the following labels for your apps:
 
 * `zoidberg_app_name` defines application name.
-* `zoidberg_app_version` defines application version.
+* `zoidberg_app_version` defines application version, defaults to `"1"`.
 * `zoidberg_balanced_by` defines load balancer name for application.
 
-Used labels for balancers:
+Arguments for `marathon` finder:
+
+* `-application-finder-marathon-url` marathon url in `http://host:port[,host:port]` format.
+* `-application-finder-marathon-balancer` balancer name to look for in `zoidberg_balanced_by` label.
+
+Arguments for `mesos` finder:
+
+* `-application-finder-mesos-masters` mesos masters in `http://host:port[,http://host:port]` format.
+* `-application-finder-mesos-name` balancer name to look for in `zoidberg_balanced_by` label.
+
+### Load balancer finders
+
+Load balancer finders discover load balancers available on your cluster.
+
+The following load balancer finders are available:
+
+* `marathon`
+* `mesos`
+* `static`
+
+You must specify load balancer finder with `-balancer-finder` cli argument.
+
+#### Static finder
+
+`static` finder has a predefined list of applications.
+
+Arguments:
+
+* `-balancer-finder-static-balancers` list of balancers in `host:port[,host:port]` format.
+
+#### Mesos and Marathon finders
+
+Both `marathon` and `mesos` finders are label based finders, which means
+that they rely on labels to discover balancers available on the cluster.
+
+Make sure to use the following labels for your apps that are load balancers:
 
 * `zoidberg_balancer_for` defines load balancer name.
 
-Several applications can be published to a single load balancer.
+Arguments for `marathon` finder:
 
-#### Marathon discoverer
+* `-balancer-finder-marathon-url` marathon url in `http://host:port[,host:port]` format.
+* `-balancer-finder-marathon-name` balancer name to look for in `zoidberg_balancer_for` label.
 
-Marathon discoverer provides service discovery for Marathon.
-It reads cluster state from Marathon API, providing health check
-awareness, but it is also can be a bit slower with many Zoidberg instances.
+Arguments for `mesos` finder:
 
-Running:
+* `-balancer-finder-mesos-masters` mesos masters in `http://host:port[,http://host:port]` format.
+* `-balancer-finder-mesos-name` balancer name to look for in `zoidberg_balancer_for` label.
 
-```
-docker run -rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.4.3 \
-    /go/bin/marathon-explorer -balancer mybalancer -name main \
-    -marathon http://marathon.dev:8080 -zk zk:2181/zoidberg-marathon-mybalancer
-```
+## Running
 
-For setup with several Marathon nodes you can use the following syntax:
+In addition to finder arguments, you also have to specify the following:
 
-```
-http://marathon1:8080,marathon2:8080,marathon3:8080
-```
+* `-name` Zoidberg instance name for identification.
+* `-host` host to listen on for API.
+* `-port` port to listen on for API.
+* `-zk` Zookeeper connection string for state persistence.
 
-Marathon discoverer supports static list of load balancers with `-servers`
-option. Syntax is `host:port[,host:port]`.
+Note that instead of cli arguments you can also use environment variables,
+just drop the first `-`, replace and `-` with `_` and capitalize argument name.
+For example, instead of specifying `-application-finder marathon` you could
+set environment variable `APPLICATION_FINDER=marathon`.
 
-#### Mesos discoverer
+Zoidberg is distributed as a docker image, below is an example how to run it
+against Marathon running on a local Mesos cluster. Ttake a look at
+[mesos-compose](https://github.com/bobrik/mesos-compose) to find out more about
+running local mesos cluster.
 
-Mesos discoverer provides service discovery for any framework running on mesos.
-It reads cluster state from Mesos master and is unaware of health checks
-that can be defined in framework. It also doesn't support several masters.
-
-Running:
 
 ```
-docker run --rm -it -e HOST=127.0.0.1 -e PORT=12345 bobrik/zoidberg:0.4.3 \
-    /go/bin/mesos-explorer -balancer mybalancer -name main \
-    -master http://mesos-master:5050 -zk zk:2181/zoidberg-mesos-mybalancer
+docker run --rm -it --net host \
+    -e HOST=0.0.0.0 \
+    -e PORT=12345 \
+    -e ZK=127.0.0.1:2181/zoidberg \
+    -e APPLICATION_FINDER=marathon \
+    -e APPLICATION_FINDER_MARATHON_URL=http://172.16.91.128:8080 \
+    -e APPLICATION_FINDER_MARATHON_BALANCER=local \
+    -e BALANCER_FINDER=static \
+    -e BALANCER_FINDER_STATIC_BALANCERS=127.0.0.1:1234 \
+    bobrik/zoidberg:0.5.0
 ```
 
-### Load balancers
+### Zoidberg API
 
-Load balancers are responsible for providing service endpoints at well-known
-address and load balancing. Zoidberg requires balancers to implement
-the next HTTP API:
-
-* `PUT /state` or `POST /state` with json like this:
-
-```json
-{
-  "apps": {
-    "myapp": {
-      "name": "myapp",
-      "servers": [
-        {
-          "host": "192.168.0.7",
-          "port": 31633,
-          "version": "1"
-        }
-      ]
-    }
-  },
-  "state": {
-    "versions": {
-      "myapp": {
-        "1": {
-          "weight": 2
-        }
-      }
-    }
-  }
-}
-```
-
-Apps have associated versions and it's generally up to balancer to decide
-how to use them. General approach is to use provided weights for servers
-of specified versions.
-
-Explorer also exposes own location to use.
-
-### Explorer
-
-Explorer is responsible for distributing state of Mesos cluster to balancers.
-It is also responsible for switching traffic between application versions.
-
-Explorer provides the next HTTP API:
+Zoidberg provides the next HTTP API:
 
 * `PUT /versions/{{app}}` or `POST /versions/{{app}}` with json like this:
 
