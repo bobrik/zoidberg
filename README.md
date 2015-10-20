@@ -22,7 +22,7 @@ it is still stabilizing. Please see release notes before upgrading.
 Zoidberg consists of several parts:
 
 * Application finders responsible for finding apps.
-* Load balancer firnders responsible for finding load balancers.
+* Load balancer finders responsible for finding load balancers.
 * Load balancers are responsible for providing well known endpoints.
 * Explorer is bounded with discoverer and responsible for version management.
 
