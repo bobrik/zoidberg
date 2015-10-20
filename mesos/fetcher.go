@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ErrNoMaster indicates that no alive mesos masters are found
+// ErrNoMesosMaster indicates that no alive mesos masters are found
 var ErrNoMesosMaster = errors.New("mesos master not found")
 
 // TaskFetcher fetches Mesos tasks from Mesos masters
