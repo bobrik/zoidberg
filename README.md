@@ -56,6 +56,7 @@ Make sure to use the following labels for your apps:
 * `zoidberg_app_name` defines application name.
 * `zoidberg_app_version` defines application version, defaults to `"1"`.
 * `zoidberg_balanced_by` defines load balancer name for application.
+* `zoidberg_meta_*` defines metadata labels for app, available in `meta`.
 
 Arguments for `marathon` finder:
 
@@ -177,7 +178,8 @@ Zoidberg provides the next HTTP API:
           "ports": [31000],
           "version": "1"
         }
-      ]
+      ],
+      "meta": {}
     }
   }
 }

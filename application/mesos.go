@@ -86,6 +86,16 @@ func (m *MesosFinder) Apps() (Apps, error) {
 		if app.Name == "" {
 			app.Name = name
 			app.Servers = []Server{}
+
+			// labels only come from the first task,
+			// this could lead to funny errors
+			app.Meta = metaFromLabels(task.Labels)
+		}
+
+		for k, v := range task.Labels {
+			if strings.HasPrefix(k, "zoidberg_meta_") {
+				app.Meta[strings.TrimPrefix(k, "zoidberg_meta_")] = v
+			}
 		}
 
 		app.Servers = append(app.Servers, Server{

@@ -2,8 +2,9 @@ package application
 
 // App represents a single application
 type App struct {
-	Name    string   `json:"name"`
-	Servers []Server `json:"servers"`
+	Name    string            `json:"name"`
+	Servers []Server          `json:"servers"`
+	Meta    map[string]string `json:"meta"`
 }
 
 // Apps is a map of app names to app instances
