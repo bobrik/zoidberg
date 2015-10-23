@@ -40,7 +40,7 @@ func (f *TaskFetcher) FetchTasks() ([]Task, error) {
 		}
 
 		defer func() {
-			err := resp.Body.Close()
+			err = resp.Body.Close()
 			if err != nil {
 				log.Printf("error closing body from %s: %s\n", u, err)
 			}

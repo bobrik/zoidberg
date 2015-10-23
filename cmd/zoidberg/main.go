@@ -54,10 +54,7 @@ func main() {
 
 	go func() {
 		addr := fmt.Sprintf("%s:%s", *h, *p)
-		err := http.ListenAndServe(addr, e.ServeMux())
-		if err != nil {
-			log.Fatal(err)
-		}
+		log.Fatal(http.ListenAndServe(addr, e.ServeMux()))
 	}()
 
 	err = e.Run()

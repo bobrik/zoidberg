@@ -86,6 +86,7 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 		if app.Name == "" {
 			app.Name = name
 			app.Servers = []Server{}
+			app.Meta = metaFromLabels(a.Labels)
 		}
 
 		for _, task := range a.Tasks {
