@@ -5,7 +5,7 @@ type State struct {
 	Versions map[string]Versions `json:"versions"`
 }
 
-// Versions is a map of app names to their versions
+// Versions is a map of version names to their definitions
 type Versions map[string]Version
 
 // Version represents some version and has a weight
