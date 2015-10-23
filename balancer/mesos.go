@@ -25,7 +25,7 @@ func init() {
 		"balancer name for mesos balancer finder",
 	)
 
-	RegisterFinderMakerFromFlags("marathon", NewMesosFinderFromFlags)
+	RegisterFinderMakerFromFlags("mesos", NewMesosFinderFromFlags)
 }
 
 // NewMesosFinderFromFlags returns new Mesos finder from global flags
