@@ -17,16 +17,16 @@ type Balancer struct {
 	Port int    `json:"port"`
 }
 
-// balancerState represents load balancer's state:
+// State represents load balancer's state:
 // known applications and their respective versions
-type balancerState struct {
+type State struct {
 	Apps  application.Apps `json:"apps"`
 	State state.State      `json:"state"`
 }
 
 // Update updates load balancer's state
 func (b Balancer) Update(name string, apps application.Apps, state state.State) error {
-	body, err := json.Marshal(balancerState{
+	body, err := json.Marshal(State{
 		Apps:  apps,
 		State: state,
 	})
