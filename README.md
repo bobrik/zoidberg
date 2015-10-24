@@ -8,9 +8,12 @@ schedule tasks to avoid downtime.
 
 ## Compatible load balancers
 
-* [zoidberg-nginx](https://github.com/bobrik/zoidberg-nginx)
+* [zoidberg-nginx](https://github.com/bobrik/zoidberg-nginx):
 supports upstream list updates without spawning new workers,
 providing rich module ecosystem from nginx, including lua modules.
+
+* [zoidberg-tcp](https://github.com/bobrik/zoidbergtcp):
+zero-configuration TCP proxy that supports automatic dynamic service creation.
 
 ## Stability
 
