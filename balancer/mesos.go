@@ -13,24 +13,24 @@ var mesosMastersFlag *string
 var mesosFinderBalancerFlag *string
 
 func init() {
-	mesosMastersFlag = flag.String(
-		"balancer-finder-mesos-masters",
-		os.Getenv("BALANCER_FINDER_MESOS_MASTERS"),
-		"mesos masters (http://host:port[,http://host:port]) for mesos balancer finder",
-	)
+	RegisterFinderMaker("mesos", FinderMaker{
+		Flags: func() {
+			mesosMastersFlag = flag.String(
+				"balancer-finder-mesos-masters",
+				os.Getenv("BALANCER_FINDER_MESOS_MASTERS"),
+				"mesos masters (http://host:port[,http://host:port]) for mesos balancer finder",
+			)
 
-	mesosFinderBalancerFlag = flag.String(
-		"balancer-finder-mesos-name",
-		os.Getenv("BALANCER_FINDER_MESOS_NAME"),
-		"balancer name for mesos balancer finder",
-	)
-
-	RegisterFinderMakerFromFlags("mesos", NewMesosFinderFromFlags)
-}
-
-// NewMesosFinderFromFlags returns new Mesos finder from global flags
-func NewMesosFinderFromFlags() (Finder, error) {
-	return NewMesosFinder(strings.Split(*mesosMastersFlag, ","), *mesosFinderBalancerFlag)
+			mesosFinderBalancerFlag = flag.String(
+				"balancer-finder-mesos-name",
+				os.Getenv("BALANCER_FINDER_MESOS_NAME"),
+				"balancer name for mesos balancer finder",
+			)
+		},
+		Maker: func() (Finder, error) {
+			return NewMesosFinder(strings.Split(*mesosMastersFlag, ","), *mesosFinderBalancerFlag)
+		},
+	})
 }
 
 // MesosFinder represents a finder that finds apps on Mesos

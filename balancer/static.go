@@ -12,34 +12,34 @@ import (
 var staticBalancersFlag *string
 
 func init() {
-	staticBalancersFlag = flag.String(
-		"balancer-finder-static-balancers",
-		os.Getenv("BALANCER_FINDER_STATIC_BALANCERS"),
-		"list of balancers (host:port[,host:port]) for static balancer finder",
-	)
+	RegisterFinderMaker("static", FinderMaker{
+		Flags: func() {
+			staticBalancersFlag = flag.String(
+				"balancer-finder-static-balancers",
+				os.Getenv("BALANCER_FINDER_STATIC_BALANCERS"),
+				"list of balancers (host:port[,host:port]) for static balancer finder",
+			)
+		},
+		Maker: func() (Finder, error) {
+			if *staticBalancersFlag == "" {
+				return nil, errors.New("got empty list of static balancers")
+			}
 
-	RegisterFinderMakerFromFlags("static", NewStaticFinderFromFlags)
-}
+			h := strings.Split(*staticBalancersFlag, ",")
 
-// NewStaticFinderFromFlags returns new static finder from global flags
-func NewStaticFinderFromFlags() (Finder, error) {
-	if *staticBalancersFlag == "" {
-		return nil, errors.New("got empty list of static balancers")
-	}
+			r := make([]Balancer, len(h))
+			for i, hp := range h {
+				b, err := balancerFromString(hp)
+				if err != nil {
+					return nil, err
+				}
 
-	h := strings.Split(*staticBalancersFlag, ",")
+				r[i] = b
+			}
 
-	r := make([]Balancer, len(h))
-	for i, hp := range h {
-		b, err := balancerFromString(hp)
-		if err != nil {
-			return nil, err
-		}
-
-		r[i] = b
-	}
-
-	return NewStaticFinder(r), nil
+			return NewStaticFinder(r), nil
+		},
+	})
 }
 
 // StaticFinder represents a finder that gets balancers from cli args

@@ -13,24 +13,24 @@ var marathonURLFlag *string
 var marathonFinderBalancer *string
 
 func init() {
-	marathonURLFlag = flag.String(
-		"application-finder-marathon-url",
-		os.Getenv("APPLICATION_FINDER_MARATHON_URL"),
-		"marathon url (http://host:port[,host:port]) for marathon application finder",
-	)
+	RegisterFinderMaker("marathon", FinderMaker{
+		Flags: func() {
+			marathonURLFlag = flag.String(
+				"application-finder-marathon-url",
+				os.Getenv("APPLICATION_FINDER_MARATHON_URL"),
+				"marathon url (http://host:port[,host:port]) for marathon application finder",
+			)
 
-	marathonFinderBalancer = flag.String(
-		"application-finder-marathon-balancer",
-		os.Getenv("APPLICATION_FINDER_MARATHON_BALANCER"),
-		"balancer name for marathon application finder",
-	)
-
-	RegisterFinderMakerFromFlags("marathon", NewMarathonFinderFromFlags)
-}
-
-// NewMarathonFinderFromFlags returns new Marathon finder from global flags
-func NewMarathonFinderFromFlags() (Finder, error) {
-	return NewMarathonFinder(*marathonURLFlag, *marathonFinderBalancer)
+			marathonFinderBalancer = flag.String(
+				"application-finder-marathon-balancer",
+				os.Getenv("APPLICATION_FINDER_MARATHON_BALANCER"),
+				"balancer name for marathon application finder",
+			)
+		},
+		Maker: func() (Finder, error) {
+			return NewMarathonFinder(*marathonURLFlag, *marathonFinderBalancer)
+		},
+	})
 }
 
 // MarathonFinder represents a finder that finds apps in Marathon

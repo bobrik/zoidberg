@@ -13,24 +13,24 @@ var marathonURLFlag *string
 var marathonFinderBalancer *string
 
 func init() {
-	marathonURLFlag = flag.String(
-		"balancer-finder-marathon-url",
-		os.Getenv("BALANCER_FINDER_MARATHON_URL"),
-		"marathon url (http://host:port[,host:port]) for marathon balancer finder",
-	)
+	RegisterFinderMaker("marathon", FinderMaker{
+		Flags: func() {
+			marathonURLFlag = flag.String(
+				"balancer-finder-marathon-url",
+				os.Getenv("BALANCER_FINDER_MARATHON_URL"),
+				"marathon url (http://host:port[,host:port]) for marathon balancer finder",
+			)
 
-	marathonFinderBalancer = flag.String(
-		"balancer-finder-marathon-name",
-		os.Getenv("BALANCER_FINDER_MARATHON_NAME"),
-		"balancer name for marathon balancer finder",
-	)
-
-	RegisterFinderMakerFromFlags("marathon", NewMarathonFinderFromFlags)
-}
-
-// NewMarathonFinderFromFlags returns new Marathon finder from global flags
-func NewMarathonFinderFromFlags() (Finder, error) {
-	return NewMarathonFinder(*marathonURLFlag, *marathonFinderBalancer)
+			marathonFinderBalancer = flag.String(
+				"balancer-finder-marathon-name",
+				os.Getenv("BALANCER_FINDER_MARATHON_NAME"),
+				"balancer name for marathon balancer finder",
+			)
+		},
+		Maker: func() (Finder, error) {
+			return NewMarathonFinder(*marathonURLFlag, *marathonFinderBalancer)
+		},
+	})
 }
 
 // MarathonFinder represents a finder that finds balancers in Marathon
