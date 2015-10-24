@@ -1,5 +1,10 @@
 package application
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // App represents a single application
 type App struct {
 	Name    string            `json:"name"`
@@ -16,4 +21,9 @@ type Server struct {
 	Port    int    `json:"port"`
 	Ports   []int  `json:"ports"`
 	Version string `json:"version"`
+}
+
+func (s Server) String() string {
+	p, _ := json.Marshal(s.Ports)
+	return fmt.Sprintf("%s%s", s.Host, p)
 }
