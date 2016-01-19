@@ -69,18 +69,18 @@ func (m *MesosFinder) Apps() (Apps, error) {
 	for _, task := range tasks {
 		meta := parseLabels(task.Labels)
 
-		for port, tags := range meta {
-			if task.Labels["balanced_by"] != m.balancer {
+		for port, labels := range meta {
+			if labels["balanced_by"] != m.balancer {
 				continue
 			}
 
-			name := task.Labels["app_name"]
+			name := labels["app_name"]
 			if name == "" {
 				log.Printf("task %s has no label app_name\n", task.Name)
 				continue
 			}
 
-			version := task.Labels["app_version"]
+			version := labels["app_version"]
 			if version == "" {
 				version = "1"
 			}
@@ -89,11 +89,10 @@ func (m *MesosFinder) Apps() (Apps, error) {
 			if app.Name == "" {
 				app.Name = name
 				app.Servers = []Server{}
-
 				// labels only come from the first task,
 				// this could lead to funny errors if there
-				// are multiple tasks with the same zoidberg_app_name
-				app.Meta = tags
+				// are multiple tasks with the same zoidberg_port_X_app_name
+				app.Meta = labels
 			}
 
 			app.Servers = append(app.Servers, Server{

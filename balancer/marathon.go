@@ -63,7 +63,7 @@ func NewMarathonFinder(u string, b string) (*MarathonFinder, error) {
 
 // Balancers returns our load balancers running on associated Marathon
 func (m *MarathonFinder) Balancers() ([]Balancer, error) {
-	apps, err := m.f.FetchApps("zoidberg_balancer_for", m.b)
+	apps, err := m.f.FetchApps(map[string]string{"zoidberg_balancer_for": m.b})
 	if err != nil {
 		return nil, err
 	}

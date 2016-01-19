@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/bobrik/zoidberg/marathon"
+	m2 "github.com/gambol99/go-marathon"
 )
 
 var marathonURLFlag *string
@@ -35,7 +36,7 @@ func NewMarathonFinderFromFlags() (Finder, error) {
 
 // MarathonFinder represents a finder that finds apps in Marathon
 type MarathonFinder struct {
-	f        *marathon.AppFetcher
+	finder   *marathon.AppFetcher
 	balancer string
 }
 
@@ -50,20 +51,20 @@ func NewMarathonFinder(u string, b string) (Finder, error) {
 		return nil, errors.New("empty balancer name for marathon application finder")
 	}
 
-	f, err := marathon.NewAppFetcher(u)
+	finder, err := marathon.NewAppFetcher(u)
 	if err != nil {
 		return nil, err
 	}
 
 	return &MarathonFinder{
-		f:        f,
+		finder:   finder,
 		balancer: b,
 	}, nil
 }
 
 // Apps returns our applications running on associated Marathon
 func (m *MarathonFinder) Apps() (Apps, error) {
-	ma, err := m.f.Apps()
+	ma, err := m.finder.FetchApps(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 			}
 			name := labels["app_name"]
 			if name == "" {
-				log.Printf("app %s has no label zoidberg_app_name\n", a.ID)
+				log.Printf("app %s has no label zoidberg_port_%d_app_name", a.ID, port)
 				continue
 			}
 
@@ -91,27 +92,11 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 			if app.Name == "" {
 				app.Name = name
 				app.Servers = []Server{}
-
-				// labels only come from the first task,
-				// this could lead to funny errors if there
-				// are multiple tasks with the same zoidberg_app_name
 				app.Meta = labels
 			}
 
 			for _, task := range a.Tasks {
-				healthy := true
-				for _, check := range task.HealthCheckResult {
-					if check == nil {
-						continue
-					}
-
-					if !check.Alive {
-						healthy = false
-						break
-					}
-				}
-
-				if !healthy {
+				if !healthCheck(task) {
 					continue
 				}
 
@@ -128,4 +113,17 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 	}
 
 	return apps, nil
+}
+
+func healthCheck(t *m2.Task) bool {
+	for _, check := range t.HealthCheckResult {
+		if check == nil {
+			continue
+		}
+
+		if !check.Alive {
+			return false
+		}
+	}
+	return true
 }
