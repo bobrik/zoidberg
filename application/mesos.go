@@ -67,45 +67,43 @@ func (m *MesosFinder) Apps() (Apps, error) {
 	apps := map[string]App{}
 
 	for _, task := range tasks {
-		if task.Labels["zoidberg_balanced_by"] != m.balancer {
-			continue
-		}
+		meta := parseLabels(task.Labels)
 
-		name := task.Labels["zoidberg_app_name"]
-		if name == "" {
-			log.Printf("task %s has no label zoidberg_app_version\n", task.Name)
-			continue
-		}
-
-		version := task.Labels["zoidberg_app_version"]
-		if version == "" {
-			version = "1"
-		}
-
-		app := apps[name]
-		if app.Name == "" {
-			app.Name = name
-			app.Servers = []Server{}
-
-			// labels only come from the first task,
-			// this could lead to funny errors
-			app.Meta = metaFromLabels(task.Labels)
-		}
-
-		for k, v := range task.Labels {
-			if strings.HasPrefix(k, "zoidberg_meta_") {
-				app.Meta[strings.TrimPrefix(k, "zoidberg_meta_")] = v
+		for port, labels := range meta {
+			if labels["balanced_by"] != m.balancer {
+				continue
 			}
+
+			name := labels["app_name"]
+			if name == "" {
+				log.Printf("task %s has no label app_name\n", task.Name)
+				continue
+			}
+
+			version := labels["app_version"]
+			if version == "" {
+				version = "1"
+			}
+
+			app := apps[name]
+			if app.Name == "" {
+				app.Name = name
+				app.Servers = []Server{}
+				// labels only come from the first task,
+				// this could lead to funny errors if there
+				// are multiple tasks with the same zoidberg_port_X_app_name
+				app.Meta = labels
+			}
+
+			app.Servers = append(app.Servers, Server{
+				Version: version,
+				Host:    task.Host,
+				Port:    task.Ports[port],
+				Ports:   task.Ports,
+			})
+
+			apps[name] = app
 		}
-
-		app.Servers = append(app.Servers, Server{
-			Version: version,
-			Host:    task.Host,
-			Port:    task.Ports[0],
-			Ports:   task.Ports,
-		})
-
-		apps[name] = app
 	}
 
 	return apps, nil

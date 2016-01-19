@@ -1,6 +1,7 @@
 package marathon
 
 import (
+	"fmt"
 	"net/url"
 
 	"github.com/gambol99/go-marathon"
@@ -26,11 +27,13 @@ func NewAppFetcher(u string) (*AppFetcher, error) {
 	}, nil
 }
 
-// FetchApps fetches apps with specific label set to specific value
-func (a *AppFetcher) FetchApps(labelKey string, labelValue string) ([]marathon.Application, error) {
+// FetchApps fetches apps with specific label set to specific value.
+func (a *AppFetcher) FetchApps(labels map[string]string) ([]marathon.Application, error) {
 	mv := url.Values{}
 	mv.Set("embed", "apps.tasks")
-	mv.Set("label", labelKey+"=="+labelValue)
+	for k, v := range labels {
+		mv.Set("label", fmt.Sprintf("%s==%s", k, v))
+	}
 
 	ma, err := a.m.Applications(mv)
 	if err != nil {
