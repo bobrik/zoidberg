@@ -19,32 +19,41 @@ package marathon
 import (
 	"io"
 	"io/ioutil"
+	"net/http"
 )
 
+// EventsTransport describes which transport should be used to deliver Marathon events
+type EventsTransport int
+
+// Config holds the settings and options for the client
 type Config struct {
-	/* the url for marathon */
+	// URL is the url for marathon
 	URL string
-	/* event handler port */
+	// EventsTransport is the events transport: EventsTransportCallback or EventsTransportSSE
+	EventsTransport EventsTransport
+	// EventsPort is the event handler port
 	EventsPort int
-	/* the interface we should be listening on for events */
+	// the interface we should be listening on for events
 	EventsInterface string
-	/* the output for logging */
+	// HTTPBasicAuthUser is the http basic auth
+	HTTPBasicAuthUser string
+	// HTTPBasicPassword is the http basic password
+	HTTPBasicPassword string
+	// CallbackURL custom callback url
+	CallbackURL string
+	// LogOutput the output for debug log messages
 	LogOutput io.Writer
-	/* the timeout for requests */
-	RequestTimeout int
-	/* http basic auth */
-	HttpBasicAuthUser string
-	/* http basic password */
-	HttpBasicPassword string
+	// HTTPClient is the http client
+	HTTPClient *http.Client
 }
 
+// NewDefaultConfig create a default client config
 func NewDefaultConfig() Config {
 	return Config{
-		URL:               "http://127.0.0.1:8080",
-		EventsPort:        10001,
-		EventsInterface:   "eth0",
-		LogOutput:         ioutil.Discard,
-		HttpBasicAuthUser: "",
-		HttpBasicPassword: "",
-		RequestTimeout:    5}
+		URL:             "http://127.0.0.1:8080",
+		EventsTransport: EventsTransportCallback,
+		EventsPort:      10001,
+		EventsInterface: "eth0",
+		LogOutput:       ioutil.Discard,
+	}
 }

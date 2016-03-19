@@ -91,7 +91,7 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 
 		for _, task := range a.Tasks {
 			healthy := true
-			for _, check := range task.HealthCheckResult {
+			for _, check := range task.HealthCheckResults {
 				if check == nil {
 					continue
 				}

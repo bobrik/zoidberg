@@ -1,7 +1,9 @@
 package marathon
 
 import (
+	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/gambol99/go-marathon"
 )
@@ -14,8 +16,10 @@ type AppFetcher struct {
 // NewAppFetcher makes a new AppFetcher with the specified Marathon location
 func NewAppFetcher(u string) (*AppFetcher, error) {
 	mc, err := marathon.NewClient(marathon.Config{
-		URL:            u,
-		RequestTimeout: 5,
+		URL: u,
+		HTTPClient: &http.Client{
+			Timeout: time.Second * 8,
+		},
 	})
 	if err != nil {
 		return nil, err
