@@ -25,6 +25,9 @@ func main() {
 	aff := flag.String("application-finder", os.Getenv("APPLICATION_FINDER"), "application finder")
 	z := flag.String("zk", os.Getenv("ZK"), "zk connection in host:port,host:port/path format")
 
+	application.RegisterFlags()
+	balancer.RegisterFlags()
+
 	flag.Parse()
 
 	if *bff == "" || *aff == "" || *h == "" || *p == "" || *z == "" {
