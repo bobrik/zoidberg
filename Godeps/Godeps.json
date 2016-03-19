@@ -1,14 +1,24 @@
 {
 	"ImportPath": "github.com/bobrik/zoidberg",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v60",
 	"Deps": [
 		{
+			"ImportPath": "github.com/donovanhide/eventsource",
+			"Rev": "c3f57f280ec708df24886d9e62f2fd178d69d8e8"
+		},
+		{
 			"ImportPath": "github.com/gambol99/go-marathon",
-			"Rev": "99e84403da1fe333cff55d94aac4ec33a917a559"
+			"Comment": "v0.0.1-19-gaf0b80c",
+			"Rev": "af0b80ccd2330baab6ab15bb8787c6b5adf61bee"
+		},
+		{
+			"ImportPath": "github.com/google/go-querystring/query",
+			"Rev": "6bb77fe6f42b85397288d4f6f67ac72f8f400ee7"
 		},
 		{
 			"ImportPath": "github.com/samuel/go-zookeeper/zk",
-			"Rev": "5bb5cfc093ad18a28148c578f8632cfdb4d802e4"
+			"Rev": "218e9c81c0dd8b3b18172b2bbfad92cc7d6db55f"
 		}
 	]
 }

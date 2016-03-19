@@ -16,17 +16,19 @@ limitations under the License.
 
 package marathon
 
+// HealthCheck is the definition for an application health check
 type HealthCheck struct {
-	Command                string `json:"command,omitempty"`
-	Protocol               string `json:"protocol,omitempty"`
-	Path                   string `json:"path,omitempty"`
-	GracePeriodSeconds     int    `json:"gracePeriodSeconds,omitempty"`
-	IntervalSeconds        int    `json:"intervalSeconds,omitempty"`
-	PortIndex              int    `json:"portIndex,omitempty"`
-	MaxConsecutiveFailures int    `json:"maxConsecutiveFailures,omitempty"`
-	TimeoutSeconds         int    `json:"timeoutSeconds,omitempty"`
+	Command                *Command `json:"command,omitempty"`
+	Protocol               string   `json:"protocol,omitempty"`
+	Path                   string   `json:"path,omitempty"`
+	GracePeriodSeconds     int      `json:"gracePeriodSeconds,omitempty"`
+	IntervalSeconds        int      `json:"intervalSeconds,omitempty"`
+	PortIndex              int      `json:"portIndex,omitempty"`
+	MaxConsecutiveFailures int      `json:"maxConsecutiveFailures"`
+	TimeoutSeconds         int      `json:"timeoutSeconds,omitempty"`
 }
 
+// NewDefaultHealthCheck creates a default application health check
 func NewDefaultHealthCheck() *HealthCheck {
 	return &HealthCheck{
 		Protocol:               "HTTP",
@@ -39,6 +41,7 @@ func NewDefaultHealthCheck() *HealthCheck {
 	}
 }
 
+// HealthCheckResult is the health check result
 type HealthCheckResult struct {
 	Alive               bool   `json:"alive"`
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
@@ -46,4 +49,9 @@ type HealthCheckResult struct {
 	LastFailure         string `json:"lastFailure"`
 	LastSuccess         string `json:"lastSuccess"`
 	TaskID              string `json:"taskId"`
+}
+
+// Command is the command health check type
+type Command struct {
+	Value string `json:"value"`
 }

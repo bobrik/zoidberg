@@ -16,7 +16,8 @@ limitations under the License.
 
 package marathon
 
+// UpgradeStrategy is upgrade strategy applied to a application
 type UpgradeStrategy struct {
-	MinimumHealthCapacity float64 `json:"minimumHealthCapacity,omitempty"`
-	MaximumOverCapicity   float64 `json:"maximumOverCapacity,omitempty"`
+	MinimumHealthCapacity float64 `json:"minimumHealthCapacity"`
+	MaximumOverCapacity   float64 `json:"maximumOverCapacity"`
 }
