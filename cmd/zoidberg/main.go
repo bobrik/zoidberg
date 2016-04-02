@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -8,8 +9,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"errors"
 
 	"github.com/bobrik/zoidberg"
 	"github.com/bobrik/zoidberg/application"
@@ -24,6 +23,8 @@ func main() {
 	bff := flag.String("balancer-finder", os.Getenv("BALANCER_FINDER"), "balancer finder")
 	aff := flag.String("application-finder", os.Getenv("APPLICATION_FINDER"), "application finder")
 	z := flag.String("zk", os.Getenv("ZK"), "zk connection in host:port,host:port/path format")
+	i := flag.Duration("interval", time.Second, "discovery interval")
+	l := flag.Duration("laziness", time.Minute, "time to skip balancer updates if there are no changes")
 
 	application.RegisterFlags()
 	balancer.RegisterFlags()
@@ -50,7 +51,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	e, err := zoidberg.NewExplorer(*n, af, bf, zc, zp)
+	e, err := zoidberg.NewExplorer(*n, af, bf, zc, zp, *i, *l)
 	if err != nil {
 		log.Fatal(err)
 	}
