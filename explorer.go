@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -24,13 +25,16 @@ type Explorer struct {
 	zookeeper *zk.Conn
 	zp        string
 	state     state.State
+	updated   map[string]update
+	interval  time.Duration
+	laziness  time.Duration
 	mutex     sync.Mutex
 }
 
 // NewExplorer creates a new Explorer instance with a name,
 // application and balancer finders and zookeeper connection
 // to persist versioning information
-func NewExplorer(name string, af application.Finder, bf balancer.Finder, zc *zk.Conn, zp string) (*Explorer, error) {
+func NewExplorer(name string, af application.Finder, bf balancer.Finder, zc *zk.Conn, zp string, interval, laziness time.Duration) (*Explorer, error) {
 	s := state.State{}
 
 	ss, _, err := zc.Get(zp)
@@ -54,6 +58,9 @@ func NewExplorer(name string, af application.Finder, bf balancer.Finder, zc *zk.
 		zookeeper: zc,
 		zp:        zp,
 		state:     s,
+		updated:   map[string]update{},
+		interval:  interval,
+		laziness:  laziness,
 		mutex:     sync.Mutex{},
 	}, nil
 }
@@ -62,7 +69,7 @@ func NewExplorer(name string, af application.Finder, bf balancer.Finder, zc *zk.
 // and updates load balancers' state
 func (e *Explorer) Run() error {
 	for {
-		time.Sleep(time.Second)
+		time.Sleep(e.interval)
 
 		d, err := e.discover()
 		if err != nil {
@@ -98,9 +105,19 @@ func (e *Explorer) updateBalancers(discovery *Discovery) {
 	state := e.getState()
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(discovery.Balancers))
+
+	now := time.Now()
 
 	for _, b := range discovery.Balancers {
+		bs := b.String()
+		if reflect.DeepEqual(e.updated[bs].apps, discovery.Apps) {
+			if now.Sub(e.updated[bs].time) < e.laziness {
+				continue
+			}
+		}
+
+		wg.Add(1)
+
 		go func(b balancer.Balancer) {
 			defer wg.Done()
 
@@ -108,6 +125,11 @@ func (e *Explorer) updateBalancers(discovery *Discovery) {
 			if err != nil {
 				log.Printf("error updating state on %s: %s\n", b, err)
 				return
+			}
+
+			e.updated[b.String()] = update{
+				time: now,
+				apps: discovery.Apps,
 			}
 		}(b)
 	}
@@ -237,4 +259,9 @@ func (e *Explorer) ServeMux() *http.ServeMux {
 	})
 
 	return mux
+}
+
+type update struct {
+	time time.Time
+	apps application.Apps
 }
