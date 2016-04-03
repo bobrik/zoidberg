@@ -3,6 +3,7 @@ package marathon
 import (
 	"net/http"
 	"net/url"
+	"io/ioutil"
 	"time"
 
 	"github.com/gambol99/go-marathon"
@@ -20,6 +21,7 @@ func NewAppFetcher(u string) (*AppFetcher, error) {
 		HTTPClient: &http.Client{
 			Timeout: time.Second * 8,
 		},
+		LogOutput: ioutil.Discard,
 	})
 	if err != nil {
 		return nil, err
