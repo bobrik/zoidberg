@@ -104,10 +104,9 @@ func (e *Explorer) discover() (*Discovery, error) {
 func (e *Explorer) updateBalancers(discovery *Discovery) {
 	state := e.getState()
 
-	wg := sync.WaitGroup{}
-
 	now := time.Now()
 
+	updates := []balancer.Balancer{}
 	for _, b := range discovery.Balancers {
 		bs := b.String()
 		if reflect.DeepEqual(e.updated[bs].apps, discovery.Apps) {
@@ -116,8 +115,13 @@ func (e *Explorer) updateBalancers(discovery *Discovery) {
 			}
 		}
 
-		wg.Add(1)
+		updates = append(updates, b)
+	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(updates))
+
+	for _, b := range updates {
 		go func(b balancer.Balancer) {
 			defer wg.Done()
 
@@ -127,10 +131,12 @@ func (e *Explorer) updateBalancers(discovery *Discovery) {
 				return
 			}
 
+			e.mutex.Lock()
 			e.updated[b.String()] = update{
 				time: now,
 				apps: discovery.Apps,
 			}
+			e.mutex.Unlock()
 		}(b)
 	}
 
