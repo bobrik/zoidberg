@@ -1,9 +1,18 @@
 language: go
 
 go:
-  - 1.5
   - 1.6
   - tip
+
+# installing godep manually: https://github.com/travis-ci/travis-ci/issues/5702
+install:
+  - go get -t github.com/tools/godep
+  - godep restore
+  - go get -t -v ./...
+
+env:
+  global:
+    - GO15VENDOREXPERIMENT=1
 
 before_script:
   - go install ./...
