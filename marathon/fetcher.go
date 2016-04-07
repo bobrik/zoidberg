@@ -1,9 +1,9 @@
 package marathon
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/url"
-	"io/ioutil"
 	"time"
 
 	"github.com/gambol99/go-marathon"
