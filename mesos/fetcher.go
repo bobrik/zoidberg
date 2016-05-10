@@ -35,20 +35,20 @@ func (f *TaskFetcher) FetchTasks() ([]Task, error) {
 		u := master + "/state.json"
 		resp, err := f.client.Get(u)
 		if err != nil {
-			log.Printf("error fetching state from %s: %s\n", u, err)
+			log.Printf("error fetching state from %s: %s", u, err)
 			continue
 		}
 
 		defer func() {
 			err = resp.Body.Close()
 			if err != nil {
-				log.Printf("error closing body from %s: %s\n", u, err)
+				log.Printf("error closing body from %s: %s", u, err)
 			}
 		}()
 
 		err = json.NewDecoder(resp.Body).Decode(&s)
 		if err != nil {
-			log.Printf("error decoding state from %s: %s\n", u, err)
+			log.Printf("error decoding state from %s: %s", u, err)
 			continue
 		}
 

@@ -127,7 +127,7 @@ func (e *Explorer) updateBalancers(discovery *Discovery) {
 
 			err := b.Update(e.name, discovery.Apps, state)
 			if err != nil {
-				log.Printf("error updating state on %s: %s\n", b, err)
+				log.Printf("error updating state on %s: %s", b, err)
 				return
 			}
 

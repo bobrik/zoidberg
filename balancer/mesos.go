@@ -9,26 +9,19 @@ import (
 	"github.com/bobrik/zoidberg/mesos"
 )
 
-var mesosMastersFlag *string
-var mesosFinderBalancerFlag *string
+var mesosFinderMesosMastersFlag *string
 
 func init() {
 	RegisterFinderMaker("mesos", FinderMaker{
 		Flags: func() {
-			mesosMastersFlag = flag.String(
+			mesosFinderMesosMastersFlag = flag.String(
 				"balancer-finder-mesos-masters",
 				os.Getenv("BALANCER_FINDER_MESOS_MASTERS"),
 				"mesos masters (http://host:port[,http://host:port]) for mesos balancer finder",
 			)
-
-			mesosFinderBalancerFlag = flag.String(
-				"balancer-finder-mesos-name",
-				os.Getenv("BALANCER_FINDER_MESOS_NAME"),
-				"balancer name for mesos balancer finder",
-			)
 		},
-		Maker: func() (Finder, error) {
-			return NewMesosFinder(strings.Split(*mesosMastersFlag, ","), *mesosFinderBalancerFlag)
+		Maker: func(balancer string) (Finder, error) {
+			return NewMesosFinder(strings.Split(*mesosFinderMesosMastersFlag, ","), balancer)
 		},
 	})
 }
@@ -54,6 +47,11 @@ func NewMesosFinder(masters []string, balancer string) (*MesosFinder, error) {
 		balancer: balancer,
 		fetcher:  mesos.NewTaskFetcher(masters),
 	}, nil
+}
+
+// Name returns the name of the balancer group
+func (m *MesosFinder) Name() string {
+	return m.balancer
 }
 
 // Balancers returns our load balancers running on Mesos

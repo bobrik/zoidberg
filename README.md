@@ -56,20 +56,21 @@ that they rely on labels to discover applications running on the cluster.
 
 Make sure to use the following labels for your apps:
 
-* `zoidberg_app_name` defines application name.
-* `zoidberg_app_version` defines application version, defaults to `"1"`.
-* `zoidberg_balanced_by` defines load balancer name for application.
-* `zoidberg_meta_*` defines metadata labels for app, available in `meta`.
+* `zoidberg_port_X_app_name` defines application name.
+* `zoidberg_port_X_app_version` defines application version, defaults to `"1"`.
+* `zoidberg_port_X_balanced_by` defines load balancer name for application.
+* `zoidberg_port_X_meta_*` defines metadata labels for app, available in `meta`.
+
+Here `X` is the port index. Each port creates a separate app so you can
+expose them through different load balancers.
 
 Arguments for `marathon` finder:
 
 * `-application-finder-marathon-url` marathon url in `http://host:port[,host:port]` format.
-* `-application-finder-marathon-balancer` balancer name to look for in `zoidberg_balanced_by` label.
 
 Arguments for `mesos` finder:
 
 * `-application-finder-mesos-masters` mesos masters in `http://host:port[,http://host:port]` format.
-* `-application-finder-mesos-name` balancer name to look for in `zoidberg_balanced_by` label.
 
 ### Load balancer finders
 
@@ -103,12 +104,10 @@ Make sure to use the following labels for your apps that are load balancers:
 Arguments for `marathon` finder:
 
 * `-balancer-finder-marathon-url` marathon url in `http://host:port[,host:port]` format.
-* `-balancer-finder-marathon-name` balancer name to look for in `zoidberg_balancer_for` label.
 
 Arguments for `mesos` finder:
 
 * `-balancer-finder-mesos-masters` mesos masters in `http://host:port[,http://host:port]` format.
-* `-balancer-finder-mesos-name` balancer name to look for in `zoidberg_balancer_for` label.
 
 ## Running
 
@@ -118,6 +117,7 @@ In addition to finder arguments, you also have to specify the following:
 * `-host` host to listen on for API.
 * `-port` port to listen on for API.
 * `-zk` Zookeeper connection string for state persistence.
+* `-balancer` balancer name to tie apps and load balancers.
 
 Note that instead of cli arguments you can also use environment variables,
 just drop the first `-`, replace and `-` with `_` and capitalize argument name.
