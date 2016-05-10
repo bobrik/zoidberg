@@ -140,7 +140,7 @@ docker run --rm -it --net host \
     -e APPLICATION_FINDER_MARATHON_BALANCER=local \
     -e BALANCER_FINDER=static \
     -e BALANCER_FINDER_STATIC_BALANCERS=127.0.0.1:1234 \
-    bobrik/zoidberg:0.5.0
+    bobrik/zoidberg:0.6.0
 ```
 
 ### Zoidberg API
