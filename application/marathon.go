@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/bobrik/zoidberg/marathon"
+	fetcher "github.com/bobrik/zoidberg/marathon"
+	"github.com/gambol99/go-marathon"
 )
 
 var marathonURLFlag *string
-var marathonFinderBalancer *string
 
 func init() {
 	RegisterFinderMaker("marathon", FinderMaker{
@@ -20,50 +20,39 @@ func init() {
 				os.Getenv("APPLICATION_FINDER_MARATHON_URL"),
 				"marathon url (http://host:port[,host:port]) for marathon application finder",
 			)
-
-			marathonFinderBalancer = flag.String(
-				"application-finder-marathon-balancer",
-				os.Getenv("APPLICATION_FINDER_MARATHON_BALANCER"),
-				"balancer name for marathon application finder",
-			)
 		},
-		Maker: func() (Finder, error) {
-			return NewMarathonFinder(*marathonURLFlag, *marathonFinderBalancer)
+		Maker: func(balancer string) (Finder, error) {
+			return NewMarathonFinder(*marathonURLFlag, balancer)
 		},
 	})
 }
 
 // MarathonFinder represents a finder that finds apps in Marathon
 type MarathonFinder struct {
-	f *marathon.AppFetcher
-	b string
+	fetcher  *fetcher.AppFetcher
+	balancer string
 }
 
-// NewMarathonFinder creates a new Marathon Finder with
-// Marathon location and load balancer name
-func NewMarathonFinder(u string, b string) (Finder, error) {
-	if len(u) == 0 {
+// NewMarathonFinder creates a new Marathon Finder with Marathon location
+func NewMarathonFinder(url string, balancer string) (Finder, error) {
+	if len(url) == 0 {
 		return nil, errors.New("empty marathon url for marathon application finder")
 	}
 
-	if len(b) == 0 {
-		return nil, errors.New("empty balancer name for marathon application finder")
-	}
-
-	f, err := marathon.NewAppFetcher(u)
+	fetcher, err := fetcher.NewAppFetcher(url)
 	if err != nil {
 		return nil, err
 	}
 
 	return &MarathonFinder{
-		f: f,
-		b: b,
+		fetcher:  fetcher,
+		balancer: balancer,
 	}, nil
 }
 
 // Apps returns our applications running on associated Marathon
 func (m *MarathonFinder) Apps() (Apps, error) {
-	ma, err := m.f.FetchApps("zoidberg_balanced_by", m.b)
+	ma, err := m.fetcher.FetchApps(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,51 +60,69 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 	apps := map[string]App{}
 
 	for _, a := range ma {
-		name := a.Labels["zoidberg_app_name"]
-		if name == "" {
-			log.Printf("app %s has no label zoidberg_app_name\n", a.ID)
-			continue
-		}
-
-		version := a.Labels["zoidberg_app_version"]
-		if version == "" {
-			version = "1"
-		}
-
-		app := apps[name]
-		if app.Name == "" {
-			app.Name = name
-			app.Servers = []Server{}
-			app.Meta = metaFromLabels(a.Labels)
-		}
-
-		for _, task := range a.Tasks {
-			healthy := true
-			for _, check := range task.HealthCheckResults {
-				if check == nil {
-					continue
-				}
-
-				if !check.Alive {
-					healthy = false
-					break
-				}
-			}
-
-			if !healthy {
+		for port, labels := range extractApps(a.Labels) {
+			if m.balancer != labels["balanced_by"] {
 				continue
 			}
 
-			app.Servers = append(app.Servers, Server{
-				Version: version,
-				Host:    task.Host,
-				Port:    task.Ports[0],
-				Ports:   task.Ports,
-			})
-		}
+			name := labels["app_name"]
+			if name == "" {
+				log.Printf("app %s has no label zoidberg_port_%d_app_name", a.ID, port)
+				continue
+			}
 
-		apps[name] = app
+			version := labels["app_version"]
+			if version == "" {
+				version = "1"
+			}
+
+			app := apps[name]
+			if app.Name == "" {
+				app.Name = name
+				app.Servers = []Server{}
+				app.Meta = labels
+			}
+
+			for _, task := range a.Tasks {
+				server := marathonTaskToServer(task, port, version)
+				if server != nil {
+					app.Servers = append(app.Servers, *server)
+				}
+			}
+
+			apps[name] = app
+		}
 	}
 
 	return apps, nil
+}
+
+func marathonTaskToServer(task *marathon.Task, port int, version string) *Server {
+	if port >= len(task.Ports) {
+		log.Printf("task %s does not have expected port %d", task.ID, port)
+		return nil
+	}
+
+	healthy := true
+	for _, check := range task.HealthCheckResults {
+		if check == nil {
+			continue
+		}
+
+		if !check.Alive {
+			healthy = false
+			break
+		}
+	}
+
+	if !healthy {
+		return nil
+	}
+
+	return &Server{
+		Version: version,
+		Host:    task.Host,
+		Port:    task.Ports[port],
+		Ports:   task.Ports,
+	}
 }

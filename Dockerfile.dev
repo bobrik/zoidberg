@@ -1,10 +1,10 @@
-FROM alpine:3.2
+FROM alpine:3.3
 
-RUN apk --update add go
+RUN apk --update add go ca-certificates
 
 COPY . /go/src/github.com/bobrik/zoidberg
 
-RUN export GOPATH=/go:/go/src/github.com/bobrik/zoidberg/Godeps/_workspace && \
+RUN export GOPATH=/go GO15VENDOREXPERIMENT=1 && \
     go get github.com/bobrik/zoidberg/...
 
 ENTRYPOINT ["/go/bin/zoidberg"]

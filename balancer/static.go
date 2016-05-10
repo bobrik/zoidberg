@@ -9,23 +9,23 @@ import (
 	"strings"
 )
 
-var staticBalancersFlag *string
+var staticFinderBalancersFlag *string
 
 func init() {
 	RegisterFinderMaker("static", FinderMaker{
 		Flags: func() {
-			staticBalancersFlag = flag.String(
+			staticFinderBalancersFlag = flag.String(
 				"balancer-finder-static-balancers",
 				os.Getenv("BALANCER_FINDER_STATIC_BALANCERS"),
 				"list of balancers (host:port[,host:port]) for static balancer finder",
 			)
 		},
-		Maker: func() (Finder, error) {
-			if *staticBalancersFlag == "" {
+		Maker: func(balancer string) (Finder, error) {
+			if *staticFinderBalancersFlag == "" {
 				return nil, errors.New("got empty list of static balancers")
 			}
 
-			h := strings.Split(*staticBalancersFlag, ",")
+			h := strings.Split(*staticFinderBalancersFlag, ",")
 
 			r := make([]Balancer, len(h))
 			for i, hp := range h {
@@ -37,7 +37,7 @@ func init() {
 				r[i] = b
 			}
 
-			return NewStaticFinder(r), nil
+			return NewStaticFinder(r, balancer), nil
 		},
 	})
 }
@@ -45,14 +45,21 @@ func init() {
 // StaticFinder represents a finder that gets balancers from cli args
 type StaticFinder struct {
 	balancers []Balancer
+	balancer  string
 }
 
 // NewStaticFinder creates a new static Finder with
 // the list of available load balancers
-func NewStaticFinder(balancers []Balancer) StaticFinder {
+func NewStaticFinder(balancers []Balancer, balancer string) StaticFinder {
 	return StaticFinder{
 		balancers: balancers,
+		balancer:  balancer,
 	}
+}
+
+// Name returns the name of the balancer group
+func (s StaticFinder) Name() string {
+	return s.balancer
 }
 
 // Balancers returns the static list of load balancers

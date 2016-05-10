@@ -11,10 +11,10 @@ type Finder interface {
 
 // FinderMaker represents finder maker tuple:
 // * a function to register flags
-// * a function to make finder from parsed flags
+// * a function to make finder from parsed flags and balancer name
 type FinderMaker struct {
 	Flags func()
-	Maker func() (Finder, error)
+	Maker func(balancer string) (Finder, error)
 }
 
 // finderMakers contains a mapping of Finder names to their makers
@@ -25,10 +25,10 @@ func RegisterFinderMaker(name string, maker FinderMaker) {
 	finderMakers[name] = maker
 }
 
-// FinderByName returns existing finder by name
-func FinderByName(finder string) (Finder, error) {
+// FinderByName returns existing finder by name a balancer name
+func FinderByName(finder string, balancer string) (Finder, error) {
 	if maker, ok := finderMakers[finder]; ok {
-		return maker.Maker()
+		return maker.Maker(balancer)
 	}
 
 	return nil, fmt.Errorf("unknown application finder: %q", finder)

@@ -20,6 +20,7 @@ func main() {
 	n := flag.String("name", os.Getenv("NAME"), "zoidberg name")
 	h := flag.String("host", os.Getenv("HOST"), "host")
 	p := flag.String("port", os.Getenv("PORT"), "port")
+	b := flag.String("balancer", os.Getenv("BALANCER"), "balancer name")
 	bff := flag.String("balancer-finder", os.Getenv("BALANCER_FINDER"), "balancer finder")
 	aff := flag.String("application-finder", os.Getenv("APPLICATION_FINDER"), "application finder")
 	z := flag.String("zk", os.Getenv("ZK"), "zk connection in host:port,host:port/path format")
@@ -31,17 +32,17 @@ func main() {
 
 	flag.Parse()
 
-	if *bff == "" || *aff == "" || *h == "" || *p == "" || *z == "" {
+	if *bff == "" || *aff == "" || *h == "" || *p == "" || *z == "" || *b == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	bf, err := balancer.FinderByName(*bff)
+	bf, err := balancer.FinderByName(*bff, *b)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	af, err := application.FinderByName(*aff)
+	af, err := application.FinderByName(*aff, *b)
 	if err != nil {
 		log.Fatal(err)
 	}
