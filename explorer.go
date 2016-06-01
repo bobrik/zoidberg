@@ -73,8 +73,7 @@ func (e *Explorer) Run() error {
 
 		d, err := e.discover()
 		if err != nil {
-			log.Fatal("error discovering:", err)
-			continue
+			return err
 		}
 
 		e.updateBalancers(d)
