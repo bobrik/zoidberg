@@ -1,8 +1,8 @@
 language: go
 
 go:
-  - 1.6
-  - tip
+  - 1.x
+  - master
 
 before_script:
   - go install ./...
