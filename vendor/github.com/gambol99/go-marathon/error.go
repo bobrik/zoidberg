@@ -44,6 +44,21 @@ const (
 	ErrCodeUnknown
 )
 
+// InvalidEndpointError indicates a endpoint error in the marathon urls
+type InvalidEndpointError struct {
+	message string
+}
+
+// Error returns the string message
+func (e *InvalidEndpointError) Error() string {
+	return e.message
+}
+
+// newInvalidEndpointError creates a new error
+func newInvalidEndpointError(message string, args ...interface{}) error {
+	return &InvalidEndpointError{message: fmt.Sprintf(message, args)}
+}
+
 // APIError represents a generic API error.
 type APIError struct {
 	// ErrCode specifies the nature of the error.
@@ -56,25 +71,28 @@ func (e *APIError) Error() string {
 }
 
 // NewAPIError creates a new APIError instance from the given response code and content.
-func NewAPIError(code int, content []byte) (*APIError, error) {
+func NewAPIError(code int, content []byte) error {
+	var errDef errorDefinition
 	switch {
 	case code == http.StatusBadRequest:
-		return parseContent(&badRequestDef{}, content)
+		errDef = &badRequestDef{}
 	case code == http.StatusUnauthorized:
-		return parseContent(&simpleErrDef{code: ErrCodeUnauthorized}, content)
+		errDef = &simpleErrDef{code: ErrCodeUnauthorized}
 	case code == http.StatusForbidden:
-		return parseContent(&simpleErrDef{code: ErrCodeForbidden}, content)
+		errDef = &simpleErrDef{code: ErrCodeForbidden}
 	case code == http.StatusNotFound:
-		return parseContent(&simpleErrDef{code: ErrCodeNotFound}, content)
+		errDef = &simpleErrDef{code: ErrCodeNotFound}
 	case code == http.StatusConflict:
-		return parseContent(&conflictDef{}, content)
+		errDef = &conflictDef{}
 	case code == 422:
-		return parseContent(&unprocessableEntityDef{}, content)
+		errDef = &unprocessableEntityDef{}
 	case code >= http.StatusInternalServerError:
-		return parseContent(&simpleErrDef{code: ErrCodeServer}, content)
+		errDef = &simpleErrDef{code: ErrCodeServer}
 	default:
-		return &APIError{ErrCodeUnknown, "unknown error"}, nil
+		errDef = &simpleErrDef{code: ErrCodeUnknown}
 	}
+
+	return parseContent(errDef, content)
 }
 
 type errorDefinition interface {
@@ -82,12 +100,15 @@ type errorDefinition interface {
 	errCode() int
 }
 
-func parseContent(errDef errorDefinition, content []byte) (*APIError, error) {
-	if err := json.Unmarshal(content, errDef); err != nil {
-		return nil, err
+func parseContent(errDef errorDefinition, content []byte) error {
+	// If the content cannot be JSON-unmarshalled, we assume that it's not JSON
+	// and encode it into the APIError instance as-is.
+	errMessage := string(content)
+	if err := json.Unmarshal(content, errDef); err == nil {
+		errMessage = errDef.message()
 	}
 
-	return &APIError{message: errDef.message(), ErrCode: errDef.errCode()}, nil
+	return &APIError{message: errMessage, ErrCode: errDef.errCode()}
 }
 
 type simpleErrDef struct {
@@ -103,20 +124,24 @@ func (def *simpleErrDef) errCode() int {
 	return def.code
 }
 
+type detailDescription struct {
+	Path   string   `json:"path"`
+	Errors []string `json:"errors"`
+}
+
+func (d detailDescription) String() string {
+	return fmt.Sprintf("path: '%s' errors: %s", d.Path, strings.Join(d.Errors, ", "))
+}
+
 type badRequestDef struct {
-	Message string `json:"message"`
-	Details []struct {
-		Path   string   `json:"path"`
-		Errors []string `json:"errors"`
-	} `json:"details"`
+	Message string              `json:"message"`
+	Details []detailDescription `json:"details"`
 }
 
 func (def *badRequestDef) message() string {
 	var details []string
 	for _, detail := range def.Details {
-		errDesc := fmt.Sprintf("path: '%s' errors: %s", detail.Path,
-			strings.Join(detail.Errors, ", "))
-		details = append(details, errDesc)
+		details = append(details, detail.String())
 	}
 
 	return fmt.Sprintf("%s (%s)", def.Message, strings.Join(details, "; "))
@@ -155,22 +180,44 @@ func (def *conflictDef) errCode() int {
 	return ErrCodeAppLocked
 }
 
+type unprocessableEntityDetails []struct {
+	// Used in Marathon >= 1.0.0-RC1.
+	detailDescription
+	// Used in Marathon < 1.0.0-RC1.
+	Attribute string `json:"attribute"`
+	Error     string `json:"error"`
+}
+
 type unprocessableEntityDef struct {
 	Message string `json:"message"`
-	Errors  []struct {
-		Attribute string `json:"attribute"`
-		Error     string `json:"error"`
-	} `json:"errors"`
+	// Name used in Marathon >= 0.15.0.
+	Details unprocessableEntityDetails `json:"details"`
+	// Name used in Marathon < 0.15.0.
+	Errors unprocessableEntityDetails `json:"errors"`
 }
 
 func (def *unprocessableEntityDef) message() string {
-	var errs []string
-	for _, err := range def.Errors {
-		errs = append(errs,
-			fmt.Sprintf("attribute '%s': %s", err.Attribute, err.Error))
+	joinDetails := func(details unprocessableEntityDetails) []string {
+		var res []string
+		for _, detail := range details {
+			res = append(res, fmt.Sprintf("attribute '%s': %s", detail.Attribute, detail.Error))
+		}
+		return res
 	}
 
-	return fmt.Sprintf("%s (%s)", def.Message, strings.Join(errs, "; "))
+	var details []string
+	switch {
+	case len(def.Errors) > 0:
+		details = joinDetails(def.Errors)
+	case len(def.Details) > 0 && len(def.Details[0].Attribute) > 0:
+		details = joinDetails(def.Details)
+	default:
+		for _, detail := range def.Details {
+			details = append(details, detail.detailDescription.String())
+		}
+	}
+
+	return fmt.Sprintf("%s (%s)", def.Message, strings.Join(details, "; "))
 }
 
 func (def *unprocessableEntityDef) errCode() int {

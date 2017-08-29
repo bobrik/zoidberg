@@ -20,7 +20,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
+
+const defaultPollingWaitTime = 500 * time.Millisecond
 
 // EventsTransport describes which transport should be used to deliver Marathon events
 type EventsTransport int
@@ -41,10 +44,14 @@ type Config struct {
 	HTTPBasicPassword string
 	// CallbackURL custom callback url
 	CallbackURL string
+	// DCOSToken for DCOS environment, This will override the Authorization header
+	DCOSToken string
 	// LogOutput the output for debug log messages
 	LogOutput io.Writer
 	// HTTPClient is the http client
 	HTTPClient *http.Client
+	// wait time (in milliseconds) between repetitive requests to the API during polling
+	PollingWaitTime time.Duration
 }
 
 // NewDefaultConfig create a default client config
@@ -55,5 +62,6 @@ func NewDefaultConfig() Config {
 		EventsPort:      10001,
 		EventsInterface: "eth0",
 		LogOutput:       ioutil.Discard,
+		PollingWaitTime: defaultPollingWaitTime,
 	}
 }

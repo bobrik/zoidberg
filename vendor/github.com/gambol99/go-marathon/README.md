@@ -100,17 +100,22 @@ for _, application := range applications.Apps {
 
 ```Go
 log.Printf("Deploying a new application")
-application := marathon.NewDockerApplication()
-application.Name("/product/name/frontend")
-application.CPU(0.1).Memory(64).Storage(0.0).Count(2)
-application.Arg("/usr/sbin/apache2ctl", "-D", "FOREGROUND")
-application.AddEnv("NAME", "frontend_http")
-application.AddEnv("SERVICE_80_NAME", "test_http")
-application.AddLabel("environment", "staging")
-application.AddLabel("security", "none")
-// add the docker container
-application.Container.Docker.Container("quay.io/gambol99/apache-php:latest").Expose(80, 443)
-application.CheckHTTP("/health", 10, 5)
+application := marathon.NewDockerApplication().
+  Name(applicationName).
+  CPU(0.1).
+  Memory(64).
+  Storage(0.0).
+  Count(2).
+  AddArgs("/usr/sbin/apache2ctl", "-D", "FOREGROUND").
+  AddEnv("NAME", "frontend_http").
+  AddEnv("SERVICE_80_NAME", "test_http").
+  CheckHTTP("/health", 10, 5)
+
+application.
+  Container.Docker.Container("quay.io/gambol99/apache-php:latest").
+  Bridged().
+  Expose(80).
+  Expose(443)
 
 if _, err := client.CreateApplication(application); err != nil {
 	log.Fatalf("Failed to create application: %s, error: %s", application, err)
@@ -143,6 +148,8 @@ setting with the following possible values: `EventsTransportSSE` and `EventsTran
 See [Event Stream](https://mesosphere.github.io/marathon/docs/rest-api.html#event-stream) and
 [Event Subscriptions](https://mesosphere.github.io/marathon/docs/rest-api.html#event-subscriptions) for details.
 
+Event subscriptions can also be individually controlled with the `Subscribe` and `Unsubscribe` functions. See [Controlling subscriptions](#controlling-subscriptions) for more details.
+
 #### Event Stream
 
 Only available in Marathon >= 0.9.0. Does not require any special configuration or prerequisites.
@@ -159,8 +166,7 @@ if err != nil {
 }
 
 // Register for events
-events := make(marathon.EventsChannel, 5)
-err = client.AddEventsListener(events, marathon.EVENTS_APPLICATIONS)
+events, err = client.AddEventsListener(marathon.EventIDApplications)
 if err != nil {
 	log.Fatalf("Failed to register for events, %s", err)
 }
@@ -178,7 +184,7 @@ for {
 		log.Printf("Exiting the loop")
 		done = true
 	case event := <-events:
-		log.Printf("Recieved event: %s", event)
+		log.Printf("Received event: %s", event)
 	}
 }
 
@@ -208,8 +214,7 @@ if err != nil {
 }
 
 // Register for events
-events := make(marathon.EventsChannel, 5)
-err = client.AddEventsListener(events, marathon.EVENTS_APPLICATIONS)
+events, err = client.AddEventsListener(marathon.EventIDApplications)
 if err != nil {
 	log.Fatalf("Failed to register for events, %s", err)
 }
@@ -227,7 +232,7 @@ for {
 		log.Printf("Exiting the loop")
 		done = true
 	case event := <-events:
-		log.Printf("Recieved event: %s", event)
+		log.Printf("Received event: %s", event)
 	}
 }
 
@@ -235,42 +240,144 @@ for {
 client.RemoveEventsListener(events)
 ```
 
-A full list of the events:
+See [events.go](events.go) for a full list of event IDs.
+
+#### Controlling subscriptions
+If you simply want to (de)register event subscribers (i.e. without starting an internal web server) you can use the `Subscribe` and `Unsubscribe` methods.
 
 ```Go
-const (
-	EVENT_API_REQUEST = 1 << iota
-	EVENT_STATUS_UPDATE
-	EVENT_FRAMEWORK_MESSAGE
-	EVENT_SUBSCRIPTION
-	EVENT_UNSUBSCRIBED
-	EVENT_STREAM_ATTACHED
-	EVENT_STREAM_DETACHED
-	EVENT_ADD_HEALTH_CHECK
-	EVENT_REMOVE_HEALTH_CHECK
-	EVENT_FAILED_HEALTH_CHECK
-	EVENT_CHANGED_HEALTH_CHECK
-	EVENT_GROUP_CHANGE_SUCCESS
-	EVENT_GROUP_CHANGE_FAILED
-	EVENT_DEPLOYMENT_SUCCESS
-	EVENT_DEPLOYMENT_FAILED
-	EVENT_DEPLOYMENT_INFO
-	EVENT_DEPLOYMENT_STEP_SUCCESS
-	EVENT_DEPLOYMENT_STEP_FAILED
-	EVENT_APP_TERMINATED
-)
+// Configure client
+config := marathon.NewDefaultConfig()
+config.URL = marathonURL
 
-const (
-	EVENTS_APPLICATIONS  = EVENT_STATUS_UPDATE | EVENT_CHANGED_HEALTH_CHECK | EVENT_FAILED_HEALTH_CHECK | EVENT_APP_TERMINATED
-	EVENTS_SUBSCRIPTIONS = EVENT_SUBSCRIPTION | EVENT_UNSUBSCRIBED | EVENT_STREAM_ATTACHED | EVENT_STREAM_DETACHED
-)
+client, err := marathon.NewClient(config)
+if err != nil {
+	log.Fatalf("Failed to create a client for marathon, error: %s", err)
+}
+
+// Register an event subscriber via a callback URL
+callbackURL := "http://10.241.1.71:9494"
+if err := client.Subscribe(callbackURL); err != nil {
+	log.Fatalf("Unable to register the callbackURL [%s], error: %s", callbackURL, err)
+}
+
+// Deregister the same subscriber
+if err := client.Unsubscribe(callbackURL); err != nil {
+	log.Fatalf("Unable to deregister the callbackURL [%s], error: %s", callbackURL, err)
+}
 ```
 
 ## Contributing
 
- - Fork it
- - Create your feature branch (git checkout -b my-new-feature)
- - Commit your changes (git commit -am 'Add some feature')
- - Push to the branch (git push origin my-new-feature)
- - Create new Pull Request
- - If applicable, update the README.md
+See the [contribution guidelines](CONTRIBUTING.md).
+
+## Development
+
+### Marathon Fake
+
+go-marathon employs a [fake Marathon implementation](https://github.com/gambol99/go-marathon/blob/master/testing_utils_test.go) for testing purposes. It [maintains a YML-encoded list of HTTP response messages](https://github.com/gambol99/go-marathon/blob/master/tests/rest-api/methods.yml) which are returned upon a successful match based upon a number of attributes, the so-called _message identifier_:
+
+- HTTP URI (without the protocol and the hostname, e.g., `/v2/apps`)
+- HTTP method (e.g., `GET`)
+- response content (i.e., the message returned)
+- scope (see below)
+
+#### Response Content
+
+The response content can be provided in one of two forms:
+
+- **static:** A pure response message returned on every match, including repeated queries.
+- **index:** A list of response messages associated to a particular (indexed) sequence order. A message will be returned _iff_ it matches and its zero-based index equals the current request count.
+
+An example for a trivial static response content is
+
+```yaml
+- uri: /v2/apps
+  method: POST
+  content: |
+		{
+		"app": {
+		}
+		}
+```
+
+which would be returned for every POST request targetting `/v2/apps`.
+
+An indexed response content would look like:
+
+```yaml
+- uri: /v2/apps
+  method: POST
+  contentSequence:
+		- index: 1
+		- content: |
+			{
+			"app": {
+				"id": "foo"
+			}
+			}
+		- index: 3
+		- content: |
+			{
+			"app": {
+				"id": "bar"
+			}
+			}
+```
+
+What this means is that the first POST request to `/v2/apps` would yield a 404, the second one the _foo_ app, the third one 404 again, the fourth one _bar_, and every following request thereafter a 404 again. Indexed responses enable more flexible testing required by some use cases.
+
+Trying to define both a static and indexed response content constitutes an error and leads to `panic`.
+
+#### Scope
+
+By default, all responses are defined globally: Every message can be queried by any request across all tests. This enables reusability and allows to keep the YML definition fairly short. For certain cases, however, it is desirable to define a set of responses that are delivered exclusively for a particular test. Scopes offer a means to do so by representing a concept similar to [namespaces](https://en.wikipedia.org/wiki/Namespace). Combined with indexed responses, they allow to return different responses for message identifiers already defined at the global level.
+
+Scopes do not have a particular format -- they are just strings. A scope must be defined in two places: The message specification and the server configuration. They are pure strings without any particular structure. Given the messages specification
+
+```yaml
+- uri: /v2/apps
+  method: GET
+	# Note: no scope defined.
+  content: |
+		{
+		"app": {
+			"id": "foo"
+		}
+		}
+- uri: /v2/apps
+  method: GET
+	scope: v1.1.1  # This one does have a scope.
+  contentSequence:
+		- index: 1
+		- content: |
+			{
+			"app": {
+				"id": "bar"
+			}
+			}
+```
+
+and the tests
+
+```go
+func TestFoo(t * testing.T) {
+	endpoint := newFakeMarathonEndpoint(t, nil)  // No custom configs given.
+	defer endpoint.Close()
+	app, err := endpoint.Client.Applications()
+	// Do something with "foo"
+}
+
+func TestFoo(t * testing.T) {
+	endpoint := newFakeMarathonEndpoint(t, &configContainer{
+		server: &serverConfig{
+			scope: "v1.1.1",		// Matches the message spec's scope.
+		},
+	})
+	defer endpoint.Close()
+	app, err := endpoint.Client.Applications()
+	// Do something with "bar"
+}
+```
+
+The "foo" response can be used by all tests using the default fake endpoint (such as `TestFoo`), while the "bar" response is only visible by tests that explicitly set the scope to `1.1.1` (as `TestBar` does) and query the endpoint twice.
