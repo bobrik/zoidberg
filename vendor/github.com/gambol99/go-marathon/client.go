@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -47,7 +48,7 @@ type Marathon interface {
 	// create an application in marathon
 	CreateApplication(application *Application) (*Application, error)
 	// delete an application
-	DeleteApplication(name string) (*DeploymentID, error)
+	DeleteApplication(name string, force bool) (*DeploymentID, error)
 	// update an application in marathon
 	UpdateApplication(application *Application, force bool) (*DeploymentID, error)
 	// a list of deployments on a application
@@ -60,6 +61,8 @@ type Marathon interface {
 	Applications(url.Values) (*Applications, error)
 	// get an application by name
 	Application(name string) (*Application, error)
+	// get an application by options
+	ApplicationBy(name string, opts *GetAppOpts) (*Application, error)
 	// get an application by name and version
 	ApplicationByVersion(name, version string) (*Application, error)
 	// wait of application
@@ -86,12 +89,16 @@ type Marathon interface {
 	Groups() (*Groups, error)
 	// retrieve a specific group from marathon
 	Group(name string) (*Group, error)
+	// list all groups in marathon by options
+	GroupsBy(opts *GetGroupOpts) (*Groups, error)
+	// retrieve a specific group from marathon by options
+	GroupBy(name string, opts *GetGroupOpts) (*Group, error)
 	// create a group deployment
 	CreateGroup(group *Group) error
 	// delete a group
-	DeleteGroup(name string) (*DeploymentID, error)
+	DeleteGroup(name string, force bool) (*DeploymentID, error)
 	// update a groups
-	UpdateGroup(id string, group *Group) (*DeploymentID, error)
+	UpdateGroup(id string, group *Group, force bool) (*DeploymentID, error)
 	// check if a group exists
 	HasGroup(name string) (bool, error)
 	// wait for an group to be deployed
@@ -113,11 +120,19 @@ type Marathon interface {
 	// a list of current subscriptions
 	Subscriptions() (*Subscriptions, error)
 	// add a events listener
-	AddEventsListener(channel EventsChannel, filter int) error
+	AddEventsListener(filter int) (EventsChannel, error)
 	// remove a events listener
 	RemoveEventsListener(channel EventsChannel)
-	// remove our self from subscriptions
+	// Subscribe a callback URL
+	Subscribe(string) error
+	// Unsubscribe a callback URL
 	Unsubscribe(string) error
+
+	// --- QUEUE ---
+	// get marathon launch queue
+	Queue() (*Queue, error)
+	// resets task launch delay of the specific application
+	DeleteQueueDelay(appID string) error
 
 	// --- MISC ---
 
@@ -134,8 +149,6 @@ type Marathon interface {
 }
 
 var (
-	// ErrInvalidEndpoint is thrown when the marathon url specified was invalid
-	ErrInvalidEndpoint = errors.New("invalid Marathon endpoint specified")
 	// ErrInvalidResponse is thrown when marathon responds with invalid or error response
 	ErrInvalidResponse = errors.New("invalid response from Marathon")
 	// ErrMarathonDown is thrown when all the marathon endpoints are down
@@ -143,6 +156,13 @@ var (
 	// ErrTimeoutError is thrown when the operation has timed out
 	ErrTimeoutError = errors.New("the operation has timed out")
 )
+
+// EventsChannelContext holds contextual data for an EventsChannel.
+type EventsChannelContext struct {
+	filter     int
+	done       chan struct{}
+	completion *sync.WaitGroup
+}
 
 type marathonClient struct {
 	sync.RWMutex
@@ -152,14 +172,14 @@ type marathonClient struct {
 	subscribedToSSE bool
 	// the ip address of the client
 	ipAddress string
-	// the http server */
+	// the http server
 	eventsHTTP *http.Server
 	// the http client use for making requests
 	httpClient *http.Client
-	// the marathon cluster
-	cluster Cluster
+	// the marathon hosts
+	hosts *cluster
 	// a map of service you wish to listen to
-	listeners map[EventsChannel]int
+	listeners map[EventsChannel]EventsChannelContext
 	// a custom logger for debug log messages
 	debugLog *log.Logger
 }
@@ -171,24 +191,35 @@ func NewClient(config Config) (Marathon, error) {
 	if config.HTTPClient == nil {
 		config.HTTPClient = http.DefaultClient
 	}
+
+	// step: if no polling wait time is set, default to 500 milliseconds.
+	if config.PollingWaitTime == 0 {
+		config.PollingWaitTime = defaultPollingWaitTime
+	}
+
 	// step: create a new cluster
-	cluster, err := newCluster(config.HTTPClient, config.URL)
+	hosts, err := newCluster(config.HTTPClient, config.URL)
 	if err != nil {
 		return nil, err
 	}
 
+	debugLogOutput := config.LogOutput
+	if debugLogOutput == nil {
+		debugLogOutput = ioutil.Discard
+	}
+
 	return &marathonClient{
 		config:     config,
-		listeners:  make(map[EventsChannel]int, 0),
-		cluster:    cluster,
+		listeners:  make(map[EventsChannel]EventsChannelContext),
+		hosts:      hosts,
 		httpClient: config.HTTPClient,
-		debugLog:   log.New(config.LogOutput, "", 0),
+		debugLog:   log.New(debugLogOutput, "", 0),
 	}, nil
 }
 
 // GetMarathonURL retrieves the marathon url
 func (r *marathonClient) GetMarathonURL() string {
-	return r.cluster.URL()
+	return r.config.URL
 }
 
 // Ping pings the current marathon endpoint (note, this is not a ICMP ping, but a rest api call)
@@ -216,68 +247,97 @@ func (r *marathonClient) apiDelete(uri string, post, result interface{}) error {
 }
 
 func (r *marathonClient) apiCall(method, uri string, body, result interface{}) error {
-	// Get a member from the cluster
-	marathon, err := r.cluster.GetMember()
-	if err != nil {
-		return err
-	}
+	for {
+		// step: grab a member from the cluster and attempt to perform the request
+		member, err := r.hosts.getMember()
+		if err != nil {
+			return ErrMarathonDown
+		}
 
-	url := fmt.Sprintf("%s/%s", marathon, uri)
+		// step: Create the endpoint url
+		url := fmt.Sprintf("%s/%s", member, uri)
+		if r.config.DCOSToken != "" {
+			url = fmt.Sprintf("%s/%s", member+"/marathon", uri)
+		}
 
-	var jsonBody []byte
-	if body != nil {
-		jsonBody, err = json.Marshal(body)
+		// step: marshall the request to json
+		var requestBody []byte
+		if body != nil {
+			if requestBody, err = json.Marshal(body); err != nil {
+				return err
+			}
+		}
+
+		// step: create the api request
+		request, err := r.buildAPIRequest(method, url, bytes.NewReader(requestBody))
 		if err != nil {
 			return err
 		}
-	}
+		response, err := r.httpClient.Do(request)
+		if err != nil {
+			r.hosts.markDown(member)
+			// step: attempt the request on another member
+			r.debugLog.Printf("apiCall(): request failed on host: %s, error: %s, trying another\n", member, err)
+			continue
+		}
+		defer response.Body.Close()
 
+		// step: read the response body
+		respBody, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+
+		if len(requestBody) > 0 {
+			r.debugLog.Printf("apiCall(): %v %v %s returned %v %s\n", request.Method, request.URL.String(), requestBody, response.Status, oneLogLine(respBody))
+		} else {
+			r.debugLog.Printf("apiCall(): %v %v returned %v %s\n", request.Method, request.URL.String(), response.Status, oneLogLine(respBody))
+		}
+
+		// step: check for a successfull response
+		if response.StatusCode >= 200 && response.StatusCode <= 299 {
+			if result != nil {
+				if err := json.Unmarshal(respBody, result); err != nil {
+					r.debugLog.Printf("apiCall(): failed to unmarshall the response from marathon, error: %s\n", err)
+					return ErrInvalidResponse
+				}
+			}
+			return nil
+		}
+
+		// step: if the member node returns a >= 500 && <= 599 we should try another node?
+		if response.StatusCode >= 500 && response.StatusCode <= 599 {
+			// step: mark the host as down
+			r.hosts.markDown(member)
+			r.debugLog.Printf("apiCall(): request failed, host: %s, status: %d, trying another\n", member, response.StatusCode)
+			continue
+		}
+
+		return NewAPIError(response.StatusCode, respBody)
+	}
+}
+
+// buildAPIRequest creates a default API request
+func (r *marathonClient) buildAPIRequest(method, url string, reader io.Reader) (*http.Request, error) {
 	// Make the http request to Marathon
-	request, err := http.NewRequest(method, url, bytes.NewReader(jsonBody))
+	request, err := http.NewRequest(method, url, reader)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Add any basic auth and the content headers
-	if r.config.HTTPBasicAuthUser != "" {
+	if r.config.HTTPBasicAuthUser != "" && r.config.HTTPBasicPassword != "" {
 		request.SetBasicAuth(r.config.HTTPBasicAuthUser, r.config.HTTPBasicPassword)
 	}
+
+	if r.config.DCOSToken != "" {
+		request.Header.Add("Authorization", "token="+r.config.DCOSToken)
+	}
+
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("Accept", "application/json")
 
-	response, err := r.httpClient.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	respBody, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-
-	if len(jsonBody) > 0 {
-		r.debugLog.Printf("apiCall(): %v %v %s returned %v %s\n", request.Method, request.URL.String(), jsonBody, response.Status, oneLogLine(respBody))
-	} else {
-		r.debugLog.Printf("apiCall(): %v %v returned %v %s\n", request.Method, request.URL.String(), response.Status, oneLogLine(respBody))
-	}
-
-	if response.StatusCode >= 200 && response.StatusCode <= 299 {
-		if result != nil {
-			if err := json.Unmarshal(respBody, result); err != nil {
-				r.debugLog.Printf("apiCall(): failed to unmarshall the response from marathon, error: %s\n", err)
-				return ErrInvalidResponse
-			}
-		}
-		return nil
-	}
-
-	apiErr, err := NewAPIError(response.StatusCode, respBody)
-	if err != nil {
-		r.debugLog.Printf("apiCall(): failed to parse error response '%s' with status code %d, error: %s", respBody, response.StatusCode, err)
-	}
-
-	return apiErr
+	return request, nil
 }
 
 var oneLogLineRegex = regexp.MustCompile(`(?m)^\s*`)

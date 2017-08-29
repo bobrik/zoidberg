@@ -60,7 +60,7 @@ func (m *MarathonFinder) Apps() (Apps, error) {
 	apps := map[string]App{}
 
 	for _, a := range ma {
-		for port, labels := range extractApps(a.Labels) {
+		for port, labels := range extractApps(*a.Labels) {
 			if m.balancer != labels["balanced_by"] {
 				continue
 			}

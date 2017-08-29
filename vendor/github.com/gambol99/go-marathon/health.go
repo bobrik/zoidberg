@@ -19,24 +19,59 @@ package marathon
 // HealthCheck is the definition for an application health check
 type HealthCheck struct {
 	Command                *Command `json:"command,omitempty"`
+	PortIndex              *int     `json:"portIndex,omitempty"`
+	Port                   *int     `json:"port,omitempty"`
+	Path                   *string  `json:"path,omitempty"`
+	MaxConsecutiveFailures *int     `json:"maxConsecutiveFailures,omitempty"`
 	Protocol               string   `json:"protocol,omitempty"`
-	Path                   string   `json:"path,omitempty"`
 	GracePeriodSeconds     int      `json:"gracePeriodSeconds,omitempty"`
 	IntervalSeconds        int      `json:"intervalSeconds,omitempty"`
-	PortIndex              int      `json:"portIndex,omitempty"`
-	MaxConsecutiveFailures int      `json:"maxConsecutiveFailures"`
 	TimeoutSeconds         int      `json:"timeoutSeconds,omitempty"`
+}
+
+// SetCommand sets the given command on the health check.
+func (h HealthCheck) SetCommand(c Command) HealthCheck {
+	h.Command = &c
+	return h
+}
+
+// SetPortIndex sets the given port index on the health check.
+func (h HealthCheck) SetPortIndex(i int) HealthCheck {
+	h.PortIndex = &i
+	return h
+}
+
+// SetPort sets the given port on the health check.
+func (h HealthCheck) SetPort(i int) HealthCheck {
+	h.Port = &i
+	return h
+}
+
+// SetPath sets the given path on the health check.
+func (h HealthCheck) SetPath(p string) HealthCheck {
+	h.Path = &p
+	return h
+}
+
+// SetMaxConsecutiveFailures sets the maximum consecutive failures on the health check.
+func (h HealthCheck) SetMaxConsecutiveFailures(i int) HealthCheck {
+	h.MaxConsecutiveFailures = &i
+	return h
 }
 
 // NewDefaultHealthCheck creates a default application health check
 func NewDefaultHealthCheck() *HealthCheck {
+	portIndex := 0
+	path := ""
+	maxConsecutiveFailures := 3
+
 	return &HealthCheck{
 		Protocol:               "HTTP",
-		Path:                   "",
+		Path:                   &path,
+		PortIndex:              &portIndex,
+		MaxConsecutiveFailures: &maxConsecutiveFailures,
 		GracePeriodSeconds:     30,
 		IntervalSeconds:        10,
-		PortIndex:              0,
-		MaxConsecutiveFailures: 3,
 		TimeoutSeconds:         5,
 	}
 }
@@ -47,6 +82,7 @@ type HealthCheckResult struct {
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
 	FirstSuccess        string `json:"firstSuccess"`
 	LastFailure         string `json:"lastFailure"`
+	LastFailureCause    string `json:"lastFailureCause"`
 	LastSuccess         string `json:"lastSuccess"`
 	TaskID              string `json:"taskId"`
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package marathon
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -28,7 +29,8 @@ type Deployment struct {
 	CurrentStep    int                 `json:"currentStep"`
 	TotalSteps     int                 `json:"totalSteps"`
 	AffectedApps   []string            `json:"affectedApps"`
-	Steps          [][]*DeploymentStep `json:"steps"`
+	Steps          [][]*DeploymentStep `json:"-"`
+	XXStepsRaw     json.RawMessage     `json:"steps"` // Holds raw steps JSON to unmarshal later
 	CurrentActions []*DeploymentStep   `json:"currentActions"`
 }
 
@@ -44,25 +46,22 @@ type DeploymentStep struct {
 	App    string `json:"app"`
 }
 
+// StepActions is a series of deployment steps
+type StepActions struct {
+	Actions []struct {
+		Action string `json:"action"` // 1.1.2 and after
+		Type   string `json:"type"`   // 1.1.1 and before
+		App    string `json:"app"`
+	}
+}
+
 // DeploymentPlan is a collection of steps for application deployment
 type DeploymentPlan struct {
-	ID       string `json:"id"`
-	Version  string `json:"version"`
-	Original struct {
-		Apps         []*Application `json:"apps"`
-		Dependencies []string       `json:"dependencies"`
-		Groups       []*Group       `json:"groups"`
-		ID           string         `json:"id"`
-		Version      string         `json:"version"`
-	} `json:"original"`
-	Steps  []*DeploymentStep `json:"steps"`
-	Target struct {
-		Apps         []*Application `json:"apps"`
-		Dependencies []string       `json:"dependencies"`
-		Groups       []*Group       `json:"groups"`
-		ID           string         `json:"id"`
-		Version      string         `json:"version"`
-	} `json:"target"`
+	ID       string         `json:"id"`
+	Version  string         `json:"version"`
+	Original *Group         `json:"original"`
+	Target   *Group         `json:"target"`
+	Steps    []*StepActions `json:"steps"`
 }
 
 // Deployments retrieves a list of current deployments
@@ -72,7 +71,34 @@ func (r *marathonClient) Deployments() ([]*Deployment, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// Allows loading of deployment steps from the Marathon v1.X API
+	// Implements a fix for issue https://github.com/gambol99/go-marathon/issues/153
+	for _, deployment := range deployments {
+		// Unmarshal pre-v1.X step
+		if err := json.Unmarshal(deployment.XXStepsRaw, &deployment.Steps); err != nil {
+			deployment.Steps = make([][]*DeploymentStep, 0)
+			var steps []*StepActions
+			// Unmarshal v1.X Marathon step
+			if err := json.Unmarshal(deployment.XXStepsRaw, &steps); err != nil {
+				return nil, err
+			}
+			for stepIndex, step := range steps {
+				deployment.Steps = append(deployment.Steps, make([]*DeploymentStep, len(step.Actions)))
+				for actionIndex, action := range step.Actions {
+					var stepAction string
+					if action.Type != "" {
+						stepAction = action.Type
+					} else {
+						stepAction = action.Action
+					}
+					deployment.Steps[stepIndex][actionIndex] = &DeploymentStep{
+						Action: stepAction,
+						App:    action.App,
+					}
+				}
+			}
+		}
+	}
 	return deployments, nil
 }
 
@@ -132,6 +158,6 @@ func (r *marathonClient) WaitOnDeployment(id string, timeout time.Duration) erro
 		if !found {
 			return nil
 		}
-		time.Sleep(time.Duration(2) * time.Second)
+		time.Sleep(r.config.PollingWaitTime)
 	}
 }
